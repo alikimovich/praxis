@@ -11,10 +11,12 @@ extension ProviderOwner {
               let type = frame["type"]?.text?.string else { return violation(session, "a frame that is not a JSON object") }
         let keys = Set(fields.map { $0.0.string })
         // Anything the turn produced (not the slash menu a session posts on its own, nor the
-        // resume id its session init records, LKM-135) stops the first-event timer.
+        // resume id its session init records, LKM-135) stops the first-event timer. A
+        // `progress` heartbeat only says the helper is alive (LKM-147): a CLI that never
+        // answers must still reach the deadline.
         let resumeOnly = type == "record" && frame["entries"] == .array([]) && frame["filesTouched"] == nil
         if ["record", "permission", "question", "tool"].contains(type) && !resumeOnly
-            || (type == "event" && frame["event"]?["type"]?.text?.string != "commands") {
+            || (type == "event" && !["commands", "progress"].contains(frame["event"]?["type"]?.text?.string ?? "")) {
             heard(session)
         }
         func only(_ allowed: Set<String>) -> Bool { keys.isSubset(of: allowed.union(["type"])) }
@@ -190,10 +192,10 @@ extension ProviderOwner {
 
     static let eventFields: [String: Set<String>] = [
         "delta": ["text"], "status": ["text"], "error": ["message"], "done": [], "usage": ["input", "output", "cached"],
-        "commands": ["commands"], "permission-resolved": ["id"], "question-resolved": ["id"],
+        "commands": ["commands"], "permission-resolved": ["id"], "question-resolved": ["id"], "progress": [],
     ]
-    /// Fields an event may leave out: an error's card code (LKM-119).
-    static let optionalEventFields: [String: Set<String>] = ["error": ["code"]]
+    /// Fields an event may leave out: an error's card code (LKM-119), a progress step (LKM-147).
+    static let optionalEventFields: [String: Set<String>] = ["error": ["code"], "progress": ["step"]]
     static let errorCodes: Set<String> = ["auth", "no-response"]
 
     /// A helper's event: a type the protocol relays, its own fields only, bounded, for its own chat.
@@ -217,6 +219,8 @@ extension ProviderOwner {
                 guard let code = field.text?.string, errorCodes.contains(code) else { return .failure(EventRefusal("an unknown error code")) }
             case "text", "message", "id":
                 guard let text = field.text, text.count <= ProviderPolicy.Limits.eventText else { return .failure(EventRefusal("an oversized event")) }
+            case "step":
+                guard bounded(field, 512) != nil else { return .failure(EventRefusal("a malformed progress event")) }
             case "input", "output", "cached":
                 guard case .number(let n) = field, n.isFinite, n >= 0 else { return .failure(EventRefusal("a malformed usage event")) }
             case "commands":

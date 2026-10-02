@@ -399,8 +399,9 @@ probes one after the other, a cold CLI start, the model thinking) as silence.
   90 s deadline (a hang at the process level). Once the CLI is up, the wait for the
   session init and the model's first output is 10 minutes (`replyTimeout`), renewed by
   every phase or progress report, so a helper that is alive and making progress is
-  never stopped. After 20 s without output the chat shows "Still starting Claude…" or
-  "Still thinking…" instead of an error. A real hang still ends with the no-response
+  never stopped. After 20 s without output the chat's status line reads "Still starting
+  Claude…" or "Still thinking…" instead of an error (a `progress` step since LKM-147, not
+  a transcript row). A real hang still ends with the no-response
   card, and its message names the phase, e.g. "Stopped while starting the Claude CLI
   (no answer in 90 s)". A helper that exits before any output also names its phase.
   The init's resume-id record no longer counts as output.
@@ -417,6 +418,28 @@ probes one after the other, a cold CLI start, the model thinking) as silence.
 Tested deterministically by `test/provider-cold-start.mjs`: the real adapter in the real
 helper under the owner fixture, with stand-in CLIs and scaled deadlines (0.5 s for 90 s,
 2.5 s for 10 min).
+
+## Live turn progress (LKM-147)
+
+- **One status line.** The chat shows one status line per running turn: the current
+  step (thinking, writing, a tool's status, or the owner's "Still thinking…" step) and
+  its elapsed time, e.g. "Running bun test · 1:24". The host ticks the timer itself
+  every second from the step's start stamp (`ChatActivityClock.swift`), so nothing has
+  to be sent to keep it moving. The duplicate "Still thinking…" transcript row is gone:
+  the owner sends it as a `progress` step.
+- **Heartbeat.** Every provider helper sends a bare `progress` event about every 5 s
+  while a turn is open (`helper-host.ts`). It never enters the transcript and never
+  counts as output. When nothing (not even a heartbeat) has arrived for a minute, the
+  status line adds "No activity for N min".
+- **Live tokens.** Claude chats stream partial messages. Its usage arrives only at a
+  message's start and end, so the adapter adds an output estimate of one token per four
+  streamed characters (text, thinking, tool input), at most every 250 ms, and the
+  authoritative report adds only the rest (`stream-usage.ts`). The counter sits on its
+  own line under the status line and is shown only while the turn runs. Codex sends no
+  estimate; its counter moves with its usage reports.
+
+Tested by `test/turn-progress.mjs` (estimate, heartbeat, clock), the controller test and
+the progress stage of `test/helpers/native-chat-scroll.mjs`.
 
 ## Codex seat models (LKM-126)
 

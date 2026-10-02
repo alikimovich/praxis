@@ -186,7 +186,8 @@ console.log('Native controller: root scoping, clipboard cancellation, renderer r
 
 // Usage is counted per turn on its response (cached input is a subset, not
 // additional usage); the chat total stays in the mirror and the tooltip. There
-// is no pinned status line any more (LKM-141).
+// is no pinned status line any more (LKM-141); the running turn's counter rides
+// on its live status and is gone once the turn ends (LKM-145/147).
 {
   const { snapshot: usageSnapshot } = await import('../src/native/chat-snapshot.ts')
   const { newChat: usageNew, reduce: usageReduce, assistant: usageAssistant } = await import('../src/native/chat-state.ts')
@@ -199,23 +200,25 @@ console.log('Native controller: root scoping, clipboard cancellation, renderer r
   usageReduce(usageChat, { type: 'usage', input: 388777, output: 491, cached: 0 })
   const running = usageSnapshot(usageChat, [])
   assert.equal('status' in running, false, 'No pinned status counter')
-  const live = running.messages.find(m => m.id === usageChat.streamingId)
-  assert.equal(live.tokens.label, '↑ 1.4M  ↓ 3.5k', 'Running turn counts its own tokens')
-  assert.match(live.tokens.detail, /not current context size/)
-  assert.match(live.tokens.detail, /Input: 1,388,777/)
-  assert.match(live.tokens.detail, /Cached input \(included above\): 1,200,000/)
-  assert.match(live.tokens.detail, /Output: 3,491/)
-  assert.match(live.tokens.detail, /This chat so far: 1,389,777 input, 3,501 output/)
-  assert.equal(running.messages.find(m => m.id === 'earlier').tokens, undefined, 'Other turns keep their own (no) count')
+  const live = running.activity.tokens
+  assert.equal(live.label, '↑ 1.4M  ↓ 3.5k', 'Running turn counts its own tokens')
+  assert.match(live.detail, /not current context size/)
+  assert.match(live.detail, /Input: 1,388,777/)
+  assert.match(live.detail, /Cached input \(included above\): 1,200,000/)
+  assert.match(live.detail, /Output: 3,491/)
+  assert.match(live.detail, /This chat so far: 1,389,777 input, 3,501 output/)
+  assert.ok(running.messages.every(m => !('tokens' in m)), 'Messages carry no counter of their own')
   assert.equal(running.activity.label, 'Thinking…')
+  // Streamed usage deltas grow the live counter between reports (LKM-147).
+  usageReduce(usageChat, { type: 'usage', input: 0, output: 1500, cached: 0 })
+  assert.equal(usageSnapshot(usageChat, []).activity.tokens.label, '↑ 1.4M  ↓ 5.0k')
   usageReduce(usageChat, { type: 'done' })
   // A report after done belongs to the response that just finished.
   usageReduce(usageChat, { type: 'usage', input: 1, output: 9, cached: 0 })
   const done = usageSnapshot(usageChat, [])
-  assert.equal(done.activity, null)
-  assert.equal(done.messages.at(-1).tokens.label, '↑ 1.4M  ↓ 3.5k')
-  assert.deepEqual(done.messages.at(-1).usage, { input: 1388778, output: 3500, cached: 1200000 })
-  assert.equal(usageChat.messages.at(-1).tokens, undefined, 'Formatting stays out of the mirrored state')
+  assert.equal(done.activity, null, 'No status line and no counter once the turn ends')
+  assert.ok(done.messages.every(m => !('tokens' in m)))
+  assert.deepEqual(done.messages.at(-1).usage, { input: 1388778, output: 5000, cached: 1200000 })
 
   // Usage before any response exists never creates an empty message. A turn
   // that ends with no text or status leaves none behind, but still counts in
@@ -233,7 +236,50 @@ console.log('Native controller: root scoping, clipboard cancellation, renderer r
   usageReduce(early, { type: 'usage', input: 5, output: 7, cached: 0 })
   usageReduce(early, { type: 'delta', text: 'Hello' })
   assert.deepEqual(early.messages[0].usage, { input: 5, output: 7, cached: 0 }, 'Early usage lands on the response once it exists')
-  assert.equal(usageSnapshot(early, []).messages[0].tokens.label, '↑ 5  ↓ 7')
+  assert.equal(usageSnapshot(early, []).activity.tokens.label, '↑ 5  ↓ 7')
+  const waiting = usageNew('waiting')
+  waiting.isRunning = true
+  usageReduce(waiting, { type: 'usage', input: 3, output: 4, cached: 0 })
+  assert.equal(usageSnapshot(waiting, []).activity.tokens.label, '↑ 3  ↓ 4', 'Usage before any response still shows')
+}
+
+// One status line with a step clock; heartbeats only keep it alive (LKM-147).
+{
+  const { snapshot: progressSnapshot } = await import('../src/native/chat-snapshot.ts')
+  const { newChat: progressNew, reduce: progressReduce, begin } = await import('../src/native/chat-state.ts')
+  const turn = progressNew('progress')
+  turn.isRunning = true
+  begin(turn, 1000)
+  let shown = progressSnapshot(turn, []).activity
+  assert.deepEqual([shown.kind, shown.label, shown.since, shown.aliveAt], ['thinking', 'Thinking…', 1000, 1000])
+  progressReduce(turn, { type: 'progress' }, 6000)
+  shown = progressSnapshot(turn, []).activity
+  assert.deepEqual([shown.label, shown.since, shown.aliveAt], ['Thinking…', 1000, 6000], 'A heartbeat renews liveness, not the step')
+  assert.equal(turn.messages.length, 0, 'A heartbeat never enters the transcript')
+  progressReduce(turn, { type: 'progress', step: 'Still thinking…' }, 7000)
+  shown = progressSnapshot(turn, []).activity
+  assert.deepEqual([shown.label, shown.since], ['Still thinking…', 1000], 'The owner’s step replaces the label; its timer keeps going')
+  assert.equal(turn.messages.length, 0, 'No duplicate "Still thinking…" row')
+  progressReduce(turn, { type: 'status', text: 'Running bun test' }, 9000)
+  shown = progressSnapshot(turn, []).activity
+  assert.deepEqual([shown.kind, shown.label, shown.since, shown.aliveAt], ['working', 'Running bun test', 9000, 9000], 'A tool starts its own step')
+  progressReduce(turn, { type: 'progress' }, 90000)
+  shown = progressSnapshot(turn, []).activity
+  assert.deepEqual([shown.label, shown.since, shown.aliveAt], ['Running bun test', 9000, 90000], 'A long tool run keeps its step while beating')
+  progressReduce(turn, { type: 'delta', text: 'Done' }, 91000)
+  shown = progressSnapshot(turn, []).activity
+  assert.deepEqual([shown.kind, shown.since], ['writing', 91000])
+  progressReduce(turn, { type: 'delta', text: ' now' }, 95000)
+  assert.equal(progressSnapshot(turn, []).activity.since, 91000, 'More text continues the writing step')
+  progressReduce(turn, { type: 'done' }, 96000)
+  assert.equal(progressSnapshot(turn, []).activity, null)
+  // A heartbeat that races the end is dropped by the controller.
+  const beats = []
+  const quiet = new NativeChatController({ invoke: async () => ({ ok: true }), render: state => beats.push(state), effect() {} })
+  quiet.get('q').isRunning = false
+  quiet.event({ projectKey: 'q', type: 'progress' })
+  assert.equal(quiet.get('q').needsReview, false, 'A stray heartbeat after the turn flags nothing')
+  assert.equal(beats.length, 0)
 }
 
 // Running includes landing and user waits; those must not imply active thinking.
