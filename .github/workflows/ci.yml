@@ -31,6 +31,7 @@ jobs:
         run: |
           xcode-select -p
           xcrun swiftc --version
+          git --version
           bun scripts/requirements.mjs --build
 
       - name: Install dependencies

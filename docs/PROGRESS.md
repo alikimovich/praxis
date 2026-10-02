@@ -2,6 +2,18 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-02 — LKM-150: Git-version-independent patch error messages
+
+- **Cause.** Git 2.55 (the GitHub runner) names the patch file in a location: "corrupt patch at <scratch>/apply-<uuid>.patch:7", where 2.50 (the operator Mac) says "corrupt patch at line 7". The LKM-130 mapping knew only "at line N", so on the runner the message kept the long temporary path and `malformed-patch` failed.
+- **Parser.** `src/service/GitMessages.swift` turns each `git apply` `error:` line into reason, file and line (`corrupt patch`, `unreadable`, `patch failed`, `does not apply`, `already exists`, `does not exist`, `does not match index`, `missing blob`, `other`). It first rewrites every location to "line N": the exact scratch path, then any `apply-<uuid>.patch` spelling after "at", "on" or "(". Remaining mentions become "the patch". A reason Git gives by patch line gets the file whose part of the patch that is. The missing-blob notice (reworded in 2.32) is shown in one fixed wording and only when nothing else explains the failure. The file is Foundation-only, so `test/git-messages.mjs` compiles it alone.
+- **Audit.** Two other places read Git's text:
+  - `applyToWorkingTree`'s three-way conflict check matched "with conflicts", `<<<<<<<` or `U \w`. It now asks the private index for unmerged entries, which Git writes for a conflict and never for a refused patch.
+  - The publish push retry (`WorkflowPublish.pushReconciled`) matched the summary line, which Git translates. `GitMessages.pushRejected` keys on the per-ref status (` ! [rejected]`, `[remote rejected]`, `(fetch first)`, `(non-fast-forward)`), which is printed untranslated in every version. A failure without a rejected ref (an unknown refspec) no longer retries.
+
+  `src/main` has no remaining match on Git's stderr. Locale is not pinned: a translated Git still breaks the apply message wording (the reason then shows as Git printed it).
+- **Tests.** `test/git-messages.mjs` (unit tier) feeds recorded stderr: 2.50.1 from fixture repos, the runner's 2.55 corrupt-patch line, and 2.55 / 2.31 spellings of the other messages. Every version of a case must give the same fields and message, with no scratch path. The real-git `malformed-patch` section asserts `{reason: 'corrupt patch', file: 'a.txt', line}` and the message built from them. It also passed locally with a PATH wrapper that rewrites the local Git's apply locations to the 2.55 spelling.
+- **CI.** The Toolchain step prints `git --version`.
+
 ## 2026-10-01 — LKM-148: the address bar fills the free toolbar width
 
 - **Layout.** `src/native/ToolbarAddress.swift` (`ToolbarAddressLayout`) sizes the preview address/branch block so its trailing edge sits 20 pt before the select/device group. The width comes from the window width and offsets measured after a toolbar layout: the right groups' inset from the trailing edge, the chat header offset, and the block's laid-out extra. So `NSWindow.didResizeNotification` sets the final width synchronously, in the resize's own layout pass, with no frame-late reflow and no jump on mouse-up. Measuring is skipped during a live resize, then repeated at its end, after the split resizes, and after Publish label changes. The chat header gives way (down to its 100 pt floor) before the block gets narrower than its former 180 pt. The block's absolute floor stays at the former 80 pt.

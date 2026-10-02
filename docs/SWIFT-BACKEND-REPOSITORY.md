@@ -30,6 +30,11 @@ to later slices: chat state, park records, Undo history, setup helpers.
   the per-common-directory lanes.
 - `src/service/RepositoryGit.swift`: the git runner, private-index snapshots and path
   rules.
+- `src/service/GitMessages.swift`: every read of Git's stderr (LKM-150): `git apply`
+  errors as reason, file and line, the same on any Git version and without the
+  scratch patch path, and the push-rejection check. Decisions that the index or a ref
+  can answer (a three-way conflict = unmerged entries) do not read Git's text at all.
+  `test/git-messages.mjs` pins recorded output of several Git versions.
 - `src/native/repository-service.ts`: Bun's client. `src/main/repository-owner.ts` is
   the seam: the mutating functions in `worktrees.ts`, `chat-worktrees.ts`,
   `live-commit.ts`, `git.ts` and `repo-write-queue.ts` dispatch to it when it is

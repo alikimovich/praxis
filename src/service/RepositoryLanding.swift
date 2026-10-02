@@ -7,8 +7,12 @@ import Darwin
 /// `checkoutBranch`/`switchBranch`, `pruneOrphans` and `pruneIntegratedChatBranches`.
 extension RepositoryEffects {
     /// `conflicted`: files the merge fallback left with markers or, for a binary file
-    /// changed on both sides, kept as they were.
-    struct Applied { var ok: Bool; var conflict: Bool; var error: String?; var empty = false; var conflicted: [String] = [] }
+    /// changed on both sides, kept as they were. `problems`: Git's parsed reasons for
+    /// a patch it refused (`error` is their user-facing text).
+    struct Applied {
+        var ok: Bool; var conflict: Bool; var error: String?; var empty = false; var conflicted: [String] = []
+        var problems: [GitMessages.ApplyProblem] = []
+    }
 
     /// Plain `git apply` (tolerates dirty work, atomic), else a three-way apply
     /// through a PRIVATE index seeded from a snapshot of the checkout, so the user's
@@ -40,19 +44,18 @@ extension RepositoryEffects {
             try git.data(directory, ["apply", "--3way", "--whitespace=nowarn", patchFile], env: env)
             return Applied(ok: true, conflict: false)
         } catch let failure as GitFailure {
-            // `git apply --3way` exits non-zero on overlap but still writes the markers.
-            // Any `error:` line means it refused the whole patch and wrote nothing.
-            let errors = Self.applyErrors(failure.stderr)
-            let text = failure.description + "\n" + failure.stdout
-            if errors.isEmpty && (text.contains("with conflicts") || text.contains("<<<<<<<")
-                || text.range(of: #"U \w"#, options: .regularExpression) != nil) {
-                return Applied(ok: false, conflict: true, error: failure.description)
+            // `git apply --3way` exits non-zero on overlap but still writes the markers
+            // and records the paths unmerged in the private index; a patch it refused as
+            // a whole wrote nothing. The index tells the two apart, not Git's wording,
+            // which changes between versions (LKM-150).
+            if let unmerged = try? git.data(directory, ["ls-files", "--unmerged", "-z"], env: env), !unmerged.isEmpty {
+                return Applied(ok: false, conflict: true, error: GitMessages.scrub(failure.description, patchFile: patchFile))
             }
             log("Trezi repository: git apply --3way refused a patch in \(directory) (\(c.kind) \(c.operationID)):\n\(failure.description)\(failure.stdout)")
-            let unreadable = errors.contains { $0.range(of: #"corrupt patch|unrecognized input|No valid patches|without header|malformed|garbage"#,
-                                                        options: [.regularExpression, .caseInsensitive]) != nil }
-            guard let merge, !unreadable, isRepoRoot(directory) else {
-                return Applied(ok: false, conflict: false, error: Self.applyReason(errors, failure.stderr, patch: patch))
+            let problems = GitMessages.applyProblems(failure.stderr, patchFile: patchFile, patch: patch)
+            guard let merge, !problems.contains(where: \.unreadable), isRepoRoot(directory) else {
+                return Applied(ok: false, conflict: false, error: Self.bounded(GitMessages.applyReason(problems, stderr: failure.stderr, patchFile: patchFile)),
+                               problems: problems)
             }
             do {
                 let merged = try mergeChange(directory, base: merge.base, tip: merge.tip, live: live, binary: binary)
@@ -66,34 +69,6 @@ extension RepositoryEffects {
                 return Applied(ok: false, conflict: false, error: Self.bounded("\(error)"))
             }
         }
-    }
-
-    /// Git's `error:` lines, without the prefix.
-    static func applyErrors(_ stderr: String) -> [String] {
-        stderr.split(separator: "\n").compactMap { $0.hasPrefix("error: ") ? String($0.dropFirst(7)) : nil }
-    }
-
-    /// Git's reasons, each naming its path: a reason Git gives by patch line only
-    /// ("corrupt patch at line 12") gets the file whose part of the patch that is.
-    static func applyReason(_ errors: [String], _ stderr: String, patch: Data) -> String {
-        let fallback = stderr.split(separator: "\n").last.map(String.init) ?? "git apply failed"
-        var seen = Set<String>()
-        let reasons = (errors.isEmpty ? [fallback] : errors).map { reason -> String in
-            guard let range = reason.range(of: #"at line \d+"#, options: .regularExpression),
-                  let number = Int(reason[range].dropFirst(8)), let path = patchPath(patch, line: number) else { return reason }
-            return "\(path): \(reason)"
-        }.filter { seen.insert($0).inserted }
-        return bounded(reasons.joined(separator: "; "))
-    }
-
-    /// The file a patch line belongs to (its `diff --git a/… b/…` header's new name).
-    static func patchPath(_ patch: Data, line number: Int) -> String? {
-        var path: String?
-        for (index, line) in String(decoding: patch, as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
-            if index >= number { break }
-            if line.hasPrefix("diff --git "), let range = line.range(of: " b/", options: .backwards) { path = String(line[range.upperBound...]) }
-        }
-        return path
     }
 
     static func bounded(_ text: String, limit: Int = 600) -> String { text.count <= limit ? text : String(text.prefix(limit - 1)) + "…" }
