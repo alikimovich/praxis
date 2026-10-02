@@ -9,7 +9,7 @@ import Darwin
 ///   looks the exact title up on GitHub and answers that issue instead of filing another.
 /// - `skills`: `npx skills add` for a curated pack. Bun's catalog picks the pack; the
 ///   service accepts only a GitHub `owner/name` and plain skill names, builds the argv
-///   itself (never a shell string), and runs it in the project (or home) folder.
+///   itself (never a shell string), and runs it in the project (for `-g`, a temporary) folder.
 struct WorkflowTools {
     let context: WorkflowContext
     var root: String { context.root }
@@ -127,7 +127,10 @@ struct WorkflowTools {
         try context.begin("install")
         let runner = context.tool("npx", timeout: context.owner.options.skillsTimeout)
         let output: GitOutput
-        do { output = try runner.run(scope == "user" ? home : root, arguments, observer: context.observer(interruptible: true)) } catch {
+        // `-g` installs into `$HOME` on its own; the installer never runs with the home folder
+        // as its cwd (LKM-137: a walk of `$HOME` reaches ~/Pictures and its privacy prompt).
+        let directory = scope == "user" ? URL(fileURLWithPath: NSTemporaryDirectory()).standardizedFileURL.path : root
+        do { output = try runner.run(directory, arguments, observer: context.observer(interruptible: true)) } catch {
             context.failed("install", "\(error)")
             return result(false, "Failed to launch installer for '\(title)': \(error)", stderr: "\(error)")
         }

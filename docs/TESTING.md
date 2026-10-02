@@ -1,8 +1,9 @@
 # Testing Trezi
 
 The test runner is `node test/run.mjs unit|native|live|all`. Unit checks run with
-bounded concurrency (default up to four workers). Native desktop and live provider
-checks are serial. Logs and JSON summaries are written to `test/artifacts/runs/`;
+bounded concurrency (default up to four workers). `service-process` is an exclusive
+barrier (no parallel workers) and has a 240 s budget because it compiles the full
+Swift service. Native desktop and live provider checks are serial. Logs and JSON summaries are written to `test/artifacts/runs/`;
 a lock prevents overlapping runner invocations. PASS, SKIP, FAIL, timeout and
 cancellation remain distinct outcomes. Each test is killed after 120 s by default
 (`--timeout-ms=<ms>` overrides it).

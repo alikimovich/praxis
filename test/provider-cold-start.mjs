@@ -149,9 +149,13 @@ async function chat() {
       .map((e) => e.text)
       .join('')
   const errors = (list) => list.filter((e) => e.type === 'error')
-  const still = (list) =>
-    list.filter((e) => e.type === 'status' && /^Still /.test(e.text)).map((e) => e.text)
-  return { s, turn, said, errors, still }
+  // LKM-147: "Still …" is a progress step, never a transcript status; heartbeats carry no step.
+  const still = (list) => {
+    assert.deepEqual(list.filter((e) => e.type === 'status' && /^Still /.test(e.text)), [], 'no "Still …" status row')
+    return list.filter((e) => e.type === 'progress' && e.step).map((e) => e.step)
+  }
+  const beats = (list) => list.filter((e) => e.type === 'progress' && !e.step).length
+  return { s, turn, said, errors, still, beats, events }
 }
 
 try {
@@ -202,6 +206,12 @@ try {
   const busy = await a.turn('busy 4000 done working')
   assert.deepEqual(a.errors(busy), [], JSON.stringify(busy))
   assert.equal(a.said(busy), 'done working')
+  // The helper's heartbeat (200 ms here) reaches the chat through the owner while the
+  // turn is open, and stops with its `done`.
+  assert.ok(a.beats(busy) >= 10, `heartbeats during a 4 s turn: ${a.beats(busy)}`)
+  const ended = a.events.length
+  await sleep(700)
+  assert.equal(a.beats(a.events.slice(ended)), 0, 'no heartbeat after the turn ended')
   assert.ok(
     debugLines('session init').length >= 3 && debugLines('first model event').length >= 3,
     fixture.stderr
@@ -232,6 +242,8 @@ try {
   const MESSAGE = 'Claude did not respond — check login (claude auth status) and retry'
   const stall = await a.turn('stall')
   assert.deepEqual(a.still(stall), ['Still thinking…'])
+  // Heartbeats kept arriving, yet they are not output: the deadline still ended the turn.
+  assert.ok(a.beats(stall) >= 5, `heartbeats during the stall: ${a.beats(stall)}`)
   assert.deepEqual(ends(stall), [
     ['error', 'no-response'],
     ['done', undefined]
@@ -258,7 +270,7 @@ try {
   ])
   assert.deepEqual(hung.still(never), [], 'no "Still …" for a CLI that never started')
   assert.equal(
-    never[0].message,
+    hung.errors(never)[0]?.message,
     `${MESSAGE}. Stopped while starting the Claude CLI (no answer in 0.5 s).`
   )
   writeFileSync(MODE, 'normal')

@@ -329,6 +329,11 @@ export type AgentEvent = (
    *  `shared/run-stats.ts`). Drives the status line's ↑/↓ counters. `cached` is
    *  the share of `input` served from the prompt cache, not an extra amount. */
   | { type: 'usage'; input: number; output: number; cached: number }
+  /** The turn is alive (LKM-147): the provider helper's heartbeat about every 5 s
+   *  while a turn is open, or the owner's "Still thinking…" (`step`). It names the
+   *  current step at most; it never enters the transcript and never counts as the
+   *  turn's first output. */
+  | { type: 'progress'; step?: string }
   | { type: 'done'; landingPending?: boolean }
   /** `code` (LKM-119): `auth` — the provider is not signed in (a login card, not
    *  assistant text); `no-response` — the turn produced nothing within the owner's

@@ -9,6 +9,20 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Shadow block drag frames show through an isolated-world box-shadow override; one source write per gesture (release or 600 ms idle); override removed only once the page's own style shows the final value; one Undo group; LKM-133 conflict rules kept.
 - [x] Native `shadow-light` check: 8-step drag with 0 gaps, 0 out of order, 0 foreign and no write before release; `shadow-light-drag.png`, `shadow-light-released.png`, `shadow-light-drag.json`.
 - [x] Real Next.js (`/shadow-flicker` in `test/fixtures/next-app`) and Vite/CSS (`test/fixtures/island-flicker-vite`) scripted drag measurements: `test/island-flicker-frameworks.mjs` logs `ISLAND-FLICKER next-*` and `vite-*` counts (requires TreziHost + `bun install` on the fixtures).
+## Live turn progress: timer, current step, streaming tokens (LKM-147)
+
+- [x] One status line: the current step and its elapsed time ("Running bun test · 1:24", "Thinking · 0:45"), ticked by a local one-second clock (`ChatActivityClock.swift`). The owner's "Still thinking…" is a `progress` step, not a transcript row.
+- [x] Live tokens: Claude's partial messages add a throttled chars/4 output estimate between usage reports (`stream-usage.ts`); the counter is the running activity's, on its own line under the status, and gone when the turn ends (LKM-145 layout).
+- [x] Helper heartbeat every 5 s while a turn is open; "No activity for N min" only after 60 s with no event or heartbeat. Heartbeats never count as output for the owner's deadlines.
+- [x] Tests: `test/turn-progress.mjs` (estimate, heartbeat, clock), `test/native-chat-controller.mjs` (progress reduction, live counter), `test/provider-cold-start.mjs` (heartbeats through the owner, no "Still …" status), native-chat-scroll progress stage (one ticking line, idle hint, counter row, footer height) at 440/320 pt.
+## Stable app identity and no surprise permission prompts (LKM-137)
+
+- [x] The build signs the app, the XPC service, the helpers and the bundled Bun with one identity: `TREZI_SIGN_IDENTITY`, else Apple Development, else "Trezi Local" (created once in the login keychain). "Trezi Local" builds pin the designated requirement to identifier + certificate. Ad hoc fallback with one warning line (`scripts/signing.mjs`).
+- [x] Keychain work moved to its own stable binary `Contents/Helpers/TreziSecrets` (`src/native/Secrets.swift`). The master key migrates once from the earlier item to `dev.trezi.native.secrets`, and the old item is deleted only after the write. New items get an access list that trusts the helper.
+- [x] Photos trigger: Check login without a project ran the helper and `claude auth status` with cwd `$HOME`. Helpers never run in a home, `/` or an ancestor (`ProviderHelperProcess.workingDirectory`). Check login, the login-shell probe and `skills add -g` use the temporary folder.
+- [x] Tests: `test/signing-identity.mjs`, `test/keychain-migration.mjs`, `test/provider-login.mjs` `helper-cwd`. Docs: README "Code signing" (one more Keychain approval, then none), `docs/PROVIDERS.md`, `docs/agent-guide/legacy-names.md`.
+- [x] Review fixes: an identity that cannot sign (locked keychain, denied key access) re-signs every piece ad hoc with the one warning instead of failing the build; a real "Trezi Local" signature in a temporary keychain proves the designated requirement is the same across two builds.
+- [ ] Manager/operator: after this build, confirm on the operator Mac that `codesign -d -r- out/native/Trezi.app` stays the same across two rebuilds, and that the Keychain asks once and then not again.
 ## Token counter inline; centered scroll-to-latest button (LKM-141)
 
 - [x] No pinned counter above the composer; each turn counts its own tokens on its response (chat total kept in the tooltip and mirror).

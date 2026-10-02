@@ -399,8 +399,9 @@ probes one after the other, a cold CLI start, the model thinking) as silence.
   90 s deadline (a hang at the process level). Once the CLI is up, the wait for the
   session init and the model's first output is 10 minutes (`replyTimeout`), renewed by
   every phase or progress report, so a helper that is alive and making progress is
-  never stopped. After 20 s without output the chat shows "Still starting Claude…" or
-  "Still thinking…" instead of an error. A real hang still ends with the no-response
+  never stopped. After 20 s without output the chat's status line reads "Still starting
+  Claude…" or "Still thinking…" instead of an error (a `progress` step since LKM-147, not
+  a transcript row). A real hang still ends with the no-response
   card, and its message names the phase, e.g. "Stopped while starting the Claude CLI
   (no answer in 90 s)". A helper that exits before any output also names its phase.
   The init's resume-id record no longer counts as output.
@@ -417,6 +418,28 @@ probes one after the other, a cold CLI start, the model thinking) as silence.
 Tested deterministically by `test/provider-cold-start.mjs`: the real adapter in the real
 helper under the owner fixture, with stand-in CLIs and scaled deadlines (0.5 s for 90 s,
 2.5 s for 10 min).
+
+## Live turn progress (LKM-147)
+
+- **One status line.** The chat shows one status line per running turn: the current
+  step (thinking, writing, a tool's status, or the owner's "Still thinking…" step) and
+  its elapsed time, e.g. "Running bun test · 1:24". The host ticks the timer itself
+  every second from the step's start stamp (`ChatActivityClock.swift`), so nothing has
+  to be sent to keep it moving. The duplicate "Still thinking…" transcript row is gone:
+  the owner sends it as a `progress` step.
+- **Heartbeat.** Every provider helper sends a bare `progress` event about every 5 s
+  while a turn is open (`helper-host.ts`). It never enters the transcript and never
+  counts as output. When nothing (not even a heartbeat) has arrived for a minute, the
+  status line adds "No activity for N min".
+- **Live tokens.** Claude chats stream partial messages. Its usage arrives only at a
+  message's start and end, so the adapter adds an output estimate of one token per four
+  streamed characters (text, thinking, tool input), at most every 250 ms, and the
+  authoritative report adds only the rest (`stream-usage.ts`). The counter sits on its
+  own line under the status line and is shown only while the turn runs. Codex sends no
+  estimate; its counter moves with its usage reports.
+
+Tested by `test/turn-progress.mjs` (estimate, heartbeat, clock), the controller test and
+the progress stage of `test/helpers/native-chat-scroll.mjs`.
 
 ## Codex seat models (LKM-126)
 
@@ -498,7 +521,7 @@ could not use the user's login Keychain. LKM-125 ([below](#the-service-keeps-the
 fixes that in the service's plist; the live confirmation is still pending, see
 [Keychain and credentials-file diagnostics](#keychain-and-credentials-file-diagnostics-lkm-124).
 (From a Terminal shell, `security find-generic-password -s "Claude
-Code-credentials"` found the item, exit 0; the service and TreziHost contexts are
+Code-credentials"` found the item, exit 0; the service and `TreziSecrets` contexts are
 compared in the table there, with the live cells still pending.)
 
 **Fix.** `ProviderHelperProcess.providerVariables` (`src/service/ProviderHelper.swift`)
@@ -570,7 +593,7 @@ this change on the operator Mac.
 | --- | --- | --- | --- | --- |
 | Terminal (iTerm, user session) | found, in `login.keychain-db`, account `panda` | exists, 0600, 463 bytes | `loggedIn: true` | operator, live (LKM-124 evidence) |
 | Service / provider helper (child of the XPC service) | **pending**: read "Keychain:", the keychain lists and "Credentials file:" from Check login | **pending**: same report | `loggedIn: false` for the bundled and the installed CLI | `claude auth status`: operator, live. Keychain and file lines: not yet run |
-| TreziHost (`TreziHost --crypto`, run by the service) | Save token in Settings fails with "macOS Keychain encryption unavailable; unlock the keychain and retry." | not applicable | not applicable | operator, live. The `OSStatus` was not captured |
+| `Contents/Helpers/TreziSecrets` (`TreziSecrets --crypto`, run by the service) | Save token in Settings fails with "macOS Keychain encryption unavailable; unlock the keychain and retry." | not applicable | not applicable | operator, live. The `OSStatus` was not captured |
 | Agent shell used for this change (a sandboxed background session, not one of the three contexts) | `find-generic-password` (metadata only) exit 0 | not looked at | not run | this change, live |
 
 To complete the two pending cells on the operator Mac (no model call): open Trezi, then
@@ -612,8 +635,8 @@ helper reported `loggedIn: false` while `claude auth status` in Terminal said `t
 **Root cause.** The XPC service's `Info.plist` had no `XPCService.JoinExistingSession`,
 so launchd started the service in a **new security session**, one without the user's
 login keychain. Every process it starts inherits that session: Bun, the
-`TreziHost --crypto` Keychain helper (connection keys, the subscription token) and the
-provider helpers with the Claude CLI (its login is the Keychain item
+`Contents/Helpers/TreziSecrets` helper (`TreziSecrets --crypto`; connection keys, the
+subscription token) and the provider helpers with the Claude CLI (its login is the Keychain item
 `Claude Code-credentials`). That held for `bun run dev` and `open -a` alike, since both
 reach the service through XPC. Only the `~/.claude/.credentials.json` fallback or an
 exported `CLAUDE_CODE_OAUTH_TOKEN` worked there.
@@ -638,6 +661,52 @@ The native settings group's `security-session` step (`src/native/smoke-session.t
 `TreziHost --session` from Bun under the real service and requires the same report as
 the host's (`security-session.json`). `test/provider-login.mjs` covers the Check login
 fields with stand-in `security` commands. No test writes to the user's keychain.
+
+## Stable app identity and no surprise permission prompts (LKM-137)
+
+**Symptom.** After every rebuild macOS asked again for the Keychain item that holds the
+master key, and once a "Trezi would like to access your Photos" prompt appeared with a
+helper's cwd `/Users/<user>`.
+
+**Keychain and privacy grants.** The build signed everything ad hoc, so every rebuild was
+a new app to macOS. It now signs with one stable identity (`scripts/signing.mjs`; README
+"Code signing"). In the login keychain an item made by a binary without an Apple team ID
+is tied to that binary's code hash, which even a stable self-signed identity changes on
+every rebuild. So the Keychain work moved out of TreziHost into its own small executable,
+`Contents/Helpers/TreziSecrets` (`src/native/Secrets.swift`, built byte-identical each
+time), which the service runs as `TreziSecrets --crypto encrypt|decrypt`. Its item is
+`dev.trezi.native.secrets`, created with an access list that trusts the helper; the
+earlier item is migrated once (read, write the new one, delete the old only after that
+write). Users approve the Keychain once more after this change, then not again.
+
+**Photos.** Settings → AI providers → Claude… → **Check login** sent no project root, so
+`providers:check-login` used `homedir()` and the service started the provider helper,
+and `claude auth status` inside it, with cwd `$HOME`. The Claude CLI looks through its
+working directory, and under `$HOME` that reaches `~/Pictures/Photos Library.photoslibrary`,
+which is what makes macOS ask for Photos. The 24 hours of TCC log on hand had no Trezi
+request, so this is identified from the code path and the reported cwd, not a captured
+event. Now:
+
+- `providers:check-login` without a project uses the temporary folder;
+- `ProviderHelperProcess.workingDirectory` (`src/service/ProviderHelper.swift`) never
+  starts a helper in a home folder (`HOME`, the helper's `HOME`, the account's), `/` or
+  another ancestor of one, or in a folder that is gone: it uses a private (0700)
+  `trezi-helper` folder under the temporary folder instead. A project or worktree is kept;
+- the host's login-shell environment probe (`HostLaunch.run`) and `npx skills add -g`
+  (`WorkflowTools.skills`) run in the temporary folder, not `$HOME`.
+
+The chat sessions already ran in the chat's worktree, and Trezi uses only NSOpenPanel and
+NSSavePanel for files; nothing in Trezi calls a Photos API.
+
+**Tests.** `test/signing-identity.mjs` (identity choice, override, every ad hoc fallback
+with exactly one warning line, an identity that cannot sign falling back to ad hoc for
+every piece with that one warning, the stable designated requirement, a real ad hoc sign,
+and a real "Trezi Local" in a temporary keychain that signs two builds with the same
+`codesign -d -r-` requirement); `test/keychain-migration.mjs` (the real
+helper against a temporary keychain: migrate once with no data loss, later runs, a fresh
+profile, an invalid old key); `test/provider-login.mjs` `helper-cwd` (Check login with a
+home, `/`, an ancestor of a home or a missing folder never runs in it). The keychain
+parts need a session that can create a keychain and say SKIP elsewhere.
 
 ## Trezi tools from provider helpers (LKM-131)
 

@@ -1,4 +1,4 @@
-// Stands in for `TreziHost --crypto encrypt|decrypt`: bytes on stdin, bytes on stdout.
+// Stands in for `TreziSecrets --crypto encrypt|decrypt`: bytes on stdin, bytes on stdout.
 // "Encrypts" by prefixing a marker and refuses to decrypt anything without it; a key
 // containing "locked" fails to encrypt (the locked-Keychain path).
 const chunks = []

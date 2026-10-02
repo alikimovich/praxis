@@ -113,11 +113,40 @@ final class ProviderHelperProcess: @unchecked Sendable {
         return out
     }
 
+    /// A helper never runs in the user's home, "/" or another ancestor of it (LKM-137): the
+    /// Claude CLI looks through its working directory, and from `$HOME` that reaches
+    /// `~/Pictures/Photos Library.photoslibrary`, so macOS asked Trezi for Photos access
+    /// after Check login without a project. Such a directory, or one that does not exist,
+    /// becomes a private (0700) temporary directory; a project or worktree is kept.
+    static func workingDirectory(_ requested: String, homes: [String] = userHomes(),
+                                 temporary: String = ProcessInfo.processInfo.environment["TMPDIR"].flatMap { $0.isEmpty ? nil : $0 } ?? NSTemporaryDirectory()) -> String {
+        let real = { (path: String) in URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path }
+        let path = real(requested)
+        var isDirectory: ObjCBool = false
+        let exists = !requested.isEmpty && FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
+        let containsHome = homes.filter { !$0.isEmpty }.map(real).contains { $0 == path || path == "/" || $0.hasPrefix(path + "/") }
+        if exists && !containsHome { return requested }
+        let fallback = URL(fileURLWithPath: real(temporary)).appendingPathComponent("trezi-helper").path
+        try? FileManager.default.createDirectory(atPath: fallback, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        _ = chmod(fallback, 0o700)
+        var info = stat()
+        return lstat(fallback, &info) == 0 && (info.st_mode & S_IFMT) == S_IFDIR && info.st_uid == getuid() ? fallback : real(temporary)
+    }
+
+    /// Every spelling of the user's home: `HOME`, Foundation's and the account database's.
+    static func userHomes() -> [String] {
+        var homes = [ProcessInfo.processInfo.environment["HOME"] ?? "", NSHomeDirectory()]
+        if let account = getpwuid(getuid()) { homes.append(String(cString: account.pointee.pw_dir)) }
+        return homes
+    }
+
     /// `onFrame` gets each complete line; `onOversize` a line longer than `maxLine`
     /// (reading stops); `onExit` the wait status and stderr tail once the group is empty.
-    static func launch(_ command: ProviderHelperCommand, directory: String, environment: [String: String], watchdog: String?,
+    /// `directory` passes through `workingDirectory` first.
+    static func launch(_ command: ProviderHelperCommand, directory requested: String, environment: [String: String], watchdog: String?,
                        maxLine: Int, onFrame: @escaping @Sendable (Data) -> Void, onOversize: @escaping @Sendable () -> Void,
                        onExit: @escaping @Sendable (Int32, String) -> Void) throws -> ProviderHelperProcess {
+        let directory = workingDirectory(requested, homes: userHomes() + [environment["HOME"] ?? ""])
         guard let executable = ManagedProcess.resolve(command.executable, path: environment["PATH"]) else {
             throw ManagedProcessError.notFound(command.executable)
         }
