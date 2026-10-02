@@ -52,6 +52,11 @@ final class ChatModel: ObservableObject {
     var islandPositions: [String: CGRect] = [:]
     /// Response footers and their token counters (`<id>-tokens`), for inspection.
     var footerFrames: [String: CGRect] = [:]
+    /// Messages showing Copy/Revert (hover or keyboard focus), for inspection.
+    var revealedActions: [String] = []
+    /// Verification only: the message treated as hovered ("" = none) instead of
+    /// the real pointer, so captures do not depend on where the cursor rests.
+    @Published var hoverOverride: String?
     /// The live status lines as rendered this second (LKM-147), for inspection.
     var statusLines: [String] = []
     var bottomPosition: CGFloat = 0
@@ -155,7 +160,7 @@ final class NativeChat: NSHostingView<ChatConversation> {
         return ["scroll":conversationScroll.map(ChatScrollStyleProbe.metrics) ?? [:], "realizedRows":model.messageFrames.count, "latestSettleAttempts":model.latestSettleAttempts, "tailFrames":tail,
          "followRevision":model.followRevision, "controlInteraction":model.controlInteraction, "visibleMessageIDs":model.messageFrames.filter { $0.value.maxY > 0 && $0.value.minY < bounds.height - model.bottomInset }.map(\.key), "bottomPosition":model.bottomPosition, "composerInset":model.bottomInset, "height":bounds.height, "revealRevision":model.revealRevision, "revealAppliedRevision":model.revealAppliedRevision, "revealAttempt":model.revealAttempt, "islandPositions":model.islandPositions.mapValues { NSStringFromRect($0) }, "catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
          "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text] } ?? [],
-         "footerFrames":model.footerFrames.mapValues { NSStringFromRect($0) }, "messageFrames":model.messageFrames.mapValues { NSStringFromRect($0) },
+         "footerFrames":model.footerFrames.mapValues { NSStringFromRect($0) }, "revealedActions":model.revealedActions, "messageFrames":model.messageFrames.mapValues { NSStringFromRect($0) },
          "statusLines":model.statusLines, "activityTokens":model.snapshot?.activity?.tokens?.label ?? "",
          "activity":model.snapshot?.activity?.label ?? "", "activityKind":model.snapshot?.activity?.kind ?? "", "activityAnimated":model.snapshot?.activity?.animated ?? false,
          "islands":model.snapshot?.messages.flatMap { $0.segments.compactMap { $0.island }.map { ["id":$0.id,"revision":$0.revision,"status":$0.status,"title":$0.title,"blocks":$0.blocks.count,"blockKinds":$0.blocks.map(\.kind),"fields":$0.fields.count,"sourceRevision":$0.sourceRevision] as [String: Any] } } ?? [],
@@ -318,6 +323,7 @@ struct ChatConversation: View {
                     }
                     .onPreferenceChange(IslandPositions.self) { model.islandPositions = $0 }
                     .onPreferenceChange(TurnFooterPositions.self) { model.footerFrames = $0 }
+                    .onPreferenceChange(RevealedActions.self) { model.revealedActions = $0 }
                     .onPreferenceChange(ChatStatusLines.self) { model.statusLines = $0 }
                     .overlay(alignment: .top) {
                         stickyRequest(proxy: proxy)
@@ -354,6 +360,10 @@ private struct NativeMessageRow: View {
     let running: Bool
     let activity: ChatActivityState?
     @ObservedObject var model: ChatModel
+    @State private var hovered = false
+    @FocusState private var focusedAction: String?
+    /// Copy/Revert stay laid out and focusable; hover or keyboard focus shows them (LKM-145).
+    private var revealsActions: Bool { (model.hoverOverride.map { $0 == message.id } ?? hovered) || focusedAction != nil }
     var body: some View {
         HStack(alignment: .top) {
             if message.role == "user" { Spacer(minLength: 30) }
@@ -361,6 +371,9 @@ private struct NativeMessageRow: View {
                 if !running, let elapsed = message.workedMs {
                     Text(workedDuration(elapsed)).font(.caption).foregroundStyle(.secondary)
                         .help("Elapsed time for this turn, including checks, waits and applying changes.")
+                } else if running && message.role == "assistant" {
+                    // Reserved, so the caption arriving on completion moves nothing (LKM-145).
+                    Text(workedDuration(0)).font(.caption).hidden()
                 }
                 if let selection = message.selection { Text(selection.tag + selection.ident).font(.caption.monospaced()).foregroundStyle(.secondary) }
                 ForEach(message.attachments ?? []) { attachment in NativeAttachment(attachment: attachment) }
@@ -382,31 +395,42 @@ private struct NativeMessageRow: View {
                 if message.role == "assistant" && (activity != nil || !running) {
                     ChatTurnFooter(id: message.id, activity: activity, visible: model.visible) {
                         HStack {
-                            Button { copyChatText(message.text) } label: { Image(systemName: "doc.on.doc") }.help("Copy response")
-                            if message.revertGroup != nil { Button { model.action("revert", id: message.id) } label: { Image(systemName: "arrow.uturn.backward") }.help("Revert this turn's edits") }
-                        }.buttonStyle(ChatActionButtonStyle())
+                            Button { copyChatText(message.text) } label: { Image(systemName: "doc.on.doc") }
+                                .help("Copy response").accessibilityLabel("Copy response").focused($focusedAction, equals: "copy")
+                            if message.revertGroup != nil {
+                                Button { model.action("revert", id: message.id) } label: { Image(systemName: "arrow.uturn.backward") }
+                                    .help("Revert this turn's edits").accessibilityLabel("Revert this turn's edits").focused($focusedAction, equals: "revert")
+                            }
+                        }.buttonStyle(ChatActionButtonStyle(revealed: revealsActions))
                     }
                 } else if let activity { ChatActivity(activity: activity, visible: model.visible) }
             }.padding(message.role == "user" ? 12 : 0)
                 .background { if message.role == "user" { RoundedRectangle(cornerRadius: 14).fill(.quaternary) } }
             if message.role == "assistant" { Spacer(minLength: 0) }
         }.frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
+            .contentShape(Rectangle())
+            .onHover { hovered = $0 }
+            .preference(key: RevealedActions.self, value: revealsActions ? [message.id] : [])
             .help(messageTime(message.at))
     }
 }
 private struct ChatActionButtonStyle: ButtonStyle {
+    /// False hides the glyph only: the button keeps its frame, focus and label.
+    var revealed = true
     func makeBody(configuration: Configuration) -> some View {
-        ChatActionButton(configuration: configuration)
+        ChatActionButton(configuration: configuration, revealed: revealed)
     }
     private struct ChatActionButton: View {
         let configuration: ButtonStyle.Configuration
+        let revealed: Bool
         @Environment(\.isEnabled) private var enabled
         @State private var hovered = false
         var body: some View {
             configuration.label
                 .frame(width: 28, height: 28)
-                .foregroundStyle(enabled && (hovered || configuration.isPressed) ? Color.primary : Color.secondary)
-                .background(Color.primary.opacity(enabled ? (configuration.isPressed ? 0.16 : hovered ? 0.08 : 0) : 0), in: RoundedRectangle(cornerRadius: 6))
+                .foregroundStyle(!revealed ? Color.clear : enabled && (hovered || configuration.isPressed) ? Color.primary : Color.secondary)
+                .background(Color.primary.opacity(enabled && revealed ? (configuration.isPressed ? 0.16 : hovered ? 0.08 : 0) : 0), in: RoundedRectangle(cornerRadius: 6))
+                .animation(.easeOut(duration: 0.12), value: revealed)
                 .contentShape(RoundedRectangle(cornerRadius: 6))
                 .onHover { hovered = $0 }
         }
