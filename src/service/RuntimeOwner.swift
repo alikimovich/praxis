@@ -25,6 +25,12 @@ final class RuntimeOwner: @unchecked Sendable {
         var allocatePort: @Sendable (Set<Int>) -> Int? = { RuntimeNet.freePort(from: RuntimeNet.portBase, reserved: $0) }
         var probe: @Sendable (String) -> Int? = { RuntimeNet.probe($0) }
         var readyTimeout: TimeInterval = 90
+        /// A ready server is probed this often; `healthFailures` unanswered probes in a
+        /// row (a cold page compile can take a while, so the timeout is generous) stop
+        /// it as unresponsive, and Bun restarts it (LKM-146).
+        var healthProbe: @Sendable (String) -> Int? = { RuntimeNet.probe($0, timeout: 10) }
+        var healthInterval: TimeInterval = 10
+        var healthFailures = 3
         var installTimeout: TimeInterval = 300
         var stopGrace: TimeInterval = 1
         var stampTimeout: TimeInterval = 5
@@ -39,6 +45,8 @@ final class RuntimeOwner: @unchecked Sendable {
     private var servers: [String: RuntimeServer] = [:]
     /// Taken out of `servers` by a stop or restart and still ending; a drain waits for them.
     private var retiring: [ObjectIdentifier: RuntimeServer] = [:]
+    /// Ready groups the health check stopped: their exit reports that, not the exit code.
+    private var unresponsive = Set<ObjectIdentifier>()
     private var installs: [String: ManagedProcess] = [:]
     private var cancelledInstalls = Set<ObjectIdentifier>()
     private var timedOutInstalls = Set<ObjectIdentifier>()
@@ -150,9 +158,11 @@ final class RuntimeOwner: @unchecked Sendable {
                 onOutput: { chunk in self.output(chunk, lines, root: root, readiness: readiness, forced: forced) },
                 onExit: { process, status in
                     self.options.journal?.remove(process.pid)
-                    let failure = RuntimeDetect.interpretFailure(code: ProcessGroup.exitCode(status), tail: lines.tail)
+                    let code = ProcessGroup.exitCode(status)
+                    let failure = RuntimeDetect.interpretFailure(code: code, tail: lines.tail)
                     readiness.settle(.failed(failure.conflict ? .conflict : .unavailable, failure.message))
-                    self.queue.async { self.ended(process, key: key, port: port) }
+                    let reason = "The dev server exited (code \(code.map(String.init) ?? "null")).\n\(RuntimeDetect.last(lines.tail, 600).string)"
+                    self.queue.async { self.ended(process, key: key, port: port, reason: reason) }
                 })
         } catch {
             reserved.remove(port)
@@ -196,6 +206,7 @@ final class RuntimeOwner: @unchecked Sendable {
             server.info = running
             if let note { log(server.root, note) }
             answer(frame, .succeeded(running))
+            watch(process, key: key, url: url, misses: 0)
         case let .failed(code, message):
             answer(frame, .failed(Self.fail(code, message, retryable: code == .conflict || code == .deadlineExceeded)))
         case let .failedAfterStop(code, message, process):
@@ -207,13 +218,37 @@ final class RuntimeOwner: @unchecked Sendable {
         }
     }
 
+    /// Probes the ready server while it is still the project's; enough misses in a row
+    /// stop its group, and its exit carries the reason.
+    private func watch(_ process: ManagedProcess, key: String, url: String, misses: Int) {
+        queue.asyncAfter(deadline: .now() + options.healthInterval) {
+            guard !self.closed, let server = self.servers[key], case .process(let current) = server.kind, current === process else { return }
+            let probe = self.options.healthProbe
+            self.work.async {
+                let answered = probe(url) != nil
+                self.queue.async {
+                    guard let server = self.servers[key], case .process(let current) = server.kind, current === process else { return }
+                    let missed = answered ? 0 : misses + 1
+                    guard missed >= self.options.healthFailures else { return self.watch(process, key: key, url: url, misses: missed) }
+                    self.unresponsive.insert(ObjectIdentifier(process))
+                    self.log(server.root, "The dev server stopped responding at \(url); stopping it.")
+                    self.work.async { process.stop(grace: self.options.stopGrace) }
+                }
+            }
+        }
+    }
+
     /// A group ended (by itself or stopped): release its port; if it was the ready
-    /// server, tell Bun so the preview evidence forgets its URL.
-    private func ended(_ process: ManagedProcess, key: String, port: Int) {
+    /// server, tell Bun why, so the preview evidence forgets its URL and the preview
+    /// restarts it.
+    private func ended(_ process: ManagedProcess, key: String, port: Int, reason: String) {
         reserved.remove(port)
+        let hung = unresponsive.remove(ObjectIdentifier(process)) != nil
         guard let server = servers[key], case .process(let current) = server.kind, current === process else { return }
         servers.removeValue(forKey: key)
-        if let url = server.url { event("exit", [("root", .string(JSText(server.root))), ("url", .string(JSText(url)))]) }
+        guard let url = server.url else { return }
+        event("exit", [("root", .string(JSText(server.root))), ("url", .string(JSText(url))),
+                       ("reason", .string(JSText(hung ? "The dev server stopped responding." : reason)))])
     }
 
     private func startSite(_ frame: PipeFrame, root: String, key: String, port: Int) {

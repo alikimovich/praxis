@@ -49,6 +49,8 @@ extension Host {
                 environment.override(accessibility: accessibility, scrollerStyle: style)
             }
         }
+        // A message id treated as hovered ("" = none; null = the real pointer again).
+        if let hover = command["hoverMessage"] { chat.model.hoverOverride = hover as? String }
         window.contentView?.layoutSubtreeIfNeeded()
         guard let probe = descendants(chat).compactMap({ $0 as? ChatScrollStyleProbe }).first,
               let scroll = probe.enclosingScrollView, let scroller = scroll.verticalScroller else {
@@ -193,7 +195,8 @@ extension Host {
             "latestButtonGap": ChatLatestButton.gap, "latestClearTop": chat.bounds.height - chat.model.latestClearHeight,
             "latestClearHeight": chat.model.latestClearHeight, "latestFade": ChatLatestButton.fade,
             "messageFrames": chat.model.messageFrames.mapValues { NSStringFromRect($0) },
-            "footerFrames": chat.model.footerFrames.mapValues { NSStringFromRect($0) }, "latestButtonLabel": chat.latestButton.accessibilityLabel() ?? "",
+            "footerFrames": chat.model.footerFrames.mapValues { NSStringFromRect($0) }, "revealedActions": chat.model.revealedActions,
+            "hoverOverride": chat.model.hoverOverride ?? NSNull(), "latestButtonLabel": chat.latestButton.accessibilityLabel() ?? "",
             "composerTop": chat.isFlipped ? composerFrame.minY : chat.bounds.height - composerFrame.maxY,
             "lastDrag": AcceptanceDiagnostics.lastDrag,
             "lastLatest": AcceptanceDiagnostics.lastLatest,

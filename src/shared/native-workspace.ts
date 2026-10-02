@@ -8,7 +8,8 @@ export type NativeProjectStatus =
   | { kind: 'busy'; label: string }
   | { kind: 'running'; name: string; url: string }
   // `detail`: the message with full paths when the shell sends `message` collapsed.
-  | { kind: 'error'; message: string; detail?: string }
+  // `restart`: a running server ended; the preview offers Restart (LKM-146).
+  | { kind: 'error'; message: string; detail?: string; restart?: boolean }
 export interface NativeWorkspaceSnapshot {
   error?: string
   revision: number

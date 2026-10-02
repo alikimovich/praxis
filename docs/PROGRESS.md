@@ -81,6 +81,91 @@ Newest first. Append a dated entry when you finish a chunk of work.
   - Worker run (native groups `islands`, `shadow-light`):
     - 8 steps, 4 sampled frames, 0 gaps, 0 out of order, 0 foreign, and no source write during the drag. WebKit throttled requestAnimationFrame, so there are fewer samples than steps.
     - In `shadow-light-drag.png` the card's shadow already follows the light at the last step (offset up and left). The chat panel still shows the initial x/y: the harness sends `islandPerform` straight to the host, so no Swift draft moves the pad.
+## 2026-10-02 — LKM-149: chat footer regression from LKM-145/147
+
+- **Failure.** Candidate failed `acceptance-440-1-lines: complete latest row above composer clearance` intermittently. The same tree had passed once before. The failure capture showed AppKit at the document end (`scrollY = documentHeight − viewport`) while SwiftUI still measured the latest row 650 pt below the reading edge. Every history footer was 44 pt, because LKM-147 reserved the counter line on all responses.
+- **Footers.** `ChatLayout.footerHeight(running:latest:)` has three cases:
+  - The running turn shows the counter line.
+  - The latest response keeps that line empty once done, so completion still moves nothing (LKM-145).
+  - Older responses have one 28 pt row, as before LKM-147.
+
+  `ChatTurnFooter` takes `latest` and fixes its frame to that height.
+- **Settle.** `ChatLatestSettle.step` checked only the end marker. It now also needs the latest row to end at the reading edge. When the marker is at the edge but the row is not (or the row is unmeasured), it returns `.relayout`: the 1 pt marker change in place, then a pin, and the next frames re-measure. LKM-139 noted that a row's frame can be stale after an AppKit pin.
+  - A first attempt sent the "row below" case through the SwiftUI `.realize` scroll. The native run then exhausted the settle (80 attempts) and blanked `send-visibility` at 320 pt, because that scroll anchors the row under the composer.
+  - `.bottom` unresolved three times in a row (the pin has nothing left to move) also escalates to `.relayout`.
+  - `run` accepts settled only on two consecutive frames.
+  - The marker resets to 1 pt when a settle ends. Without the reset, the nudge parity left a 1 pt offset between the running and done captures.
+  - While the marker is nudged to 2 pt, the bottom padding gives back 1 pt. The document height and every row's place stay the same even mid-settle. Without this, a hover capture taken mid-settle read all frames 1 pt higher.
+- **Tests.**
+  - `native-chat-latest-settle --cases` pins the step, relayout and escalation decisions and the 28/44 pt footer heights. Its offscreen samples now also require the latest row at the reading edge and a settle that did not exhaust its attempts.
+  - `native-chat-scroll`: the progress stage asserts a 44 pt running footer and 28 pt history footers. Every chat acceptance capture asserts 28 pt history and 44 pt latest footers.
+- **Verification.** The worker had 3 native calls. Call 1 (chat group) failed on send-visibility, which led to the `.relayout` design. Call 2 (chat group) passed send-visibility and the 28 pt history assertion, then failed on the 1 pt nudge offset, which led to the reset. Call 3 was the full native suite.
+  - The smoke suite passed 23/23.
+  - At 440 pt, the whole chat-scroll progress stage passed, including the completion checks.
+  - At 320 pt, the hover check failed because every frame was 1 pt higher (a capture taken mid-nudge). That led to the padding compensation, which is unverified natively.
+
+  Five consecutive chat-acceptance passes were not possible within the call limit and are left to the manager.
+## 2026-10-02 — LKM-150: Git-version-independent patch error messages
+
+- **Cause.** Git 2.55 (the GitHub runner) names the patch file in a location: "corrupt patch at <scratch>/apply-<uuid>.patch:7", where 2.50 (the operator Mac) says "corrupt patch at line 7". The LKM-130 mapping knew only "at line N", so on the runner the message kept the long temporary path and `malformed-patch` failed.
+- **Parser.** `src/service/GitMessages.swift` turns each `git apply` `error:` line into reason, file and line (`corrupt patch`, `unreadable`, `patch failed`, `does not apply`, `already exists`, `does not exist`, `does not match index`, `missing blob`, `other`). It first rewrites every location to "line N": the exact scratch path, then any `apply-<uuid>.patch` spelling after "at", "on" or "(". Remaining mentions become "the patch". A reason Git gives by patch line gets the file whose part of the patch that is. The missing-blob notice (reworded in 2.32) is shown in one fixed wording and only when nothing else explains the failure. The file is Foundation-only, so `test/git-messages.mjs` compiles it alone.
+- **Audit.** Two other places read Git's text:
+  - `applyToWorkingTree`'s three-way conflict check matched "with conflicts", `<<<<<<<` or `U \w`. It now asks the private index for unmerged entries, which Git writes for a conflict and never for a refused patch.
+  - The publish push retry (`WorkflowPublish.pushReconciled`) matched the summary line, which Git translates. `GitMessages.pushRejected` keys on the per-ref status (` ! [rejected]`, `[remote rejected]`, `(fetch first)`, `(non-fast-forward)`), which is printed untranslated in every version. A failure without a rejected ref (an unknown refspec) no longer retries.
+
+  `src/main` has no remaining match on Git's stderr. Locale is not pinned: a translated Git still breaks the apply message wording (the reason then shows as Git printed it).
+- **Tests.** `test/git-messages.mjs` (unit tier) feeds recorded stderr: 2.50.1 from fixture repos, the runner's 2.55 corrupt-patch line, and 2.55 / 2.31 spellings of the other messages. Every version of a case must give the same fields and message, with no scratch path. The real-git `malformed-patch` section asserts `{reason: 'corrupt patch', file: 'a.txt', line}` and the message built from them. It also passed locally with a PATH wrapper that rewrites the local Git's apply locations to the 2.55 spelling.
+- **CI.** The Toolchain step prints `git --version`.
+
+## 2026-10-01 — LKM-148: the address bar fills the free toolbar width
+
+- **Layout.** `src/native/ToolbarAddress.swift` (`ToolbarAddressLayout`) sizes the preview address/branch block so its trailing edge sits 20 pt before the select/device group. The width comes from the window width and offsets measured after a toolbar layout: the right groups' inset from the trailing edge, the chat header offset, and the block's laid-out extra. So `NSWindow.didResizeNotification` sets the final width synchronously, in the resize's own layout pass, with no frame-late reflow and no jump on mouse-up. Measuring is skipped during a live resize, then repeated at its end, after the split resizes, and after Publish label changes. The chat header gives way (down to its 100 pt floor) before the block gets narrower than its former 180 pt. The block's absolute floor stays at the former 80 pt.
+- **Why 20 pt and a measured inset.** Probes on macOS 26 showed:
+  - NSToolbar keeps the high-priority right groups pinned only while 14–16 pt (depending on the items) separate them from the block. Closer, it shifts them and drops the `.space` items; about 30 pt short, it moves the address item into overflow.
+  - An overflowed item cannot be measured. A startup guess below the real inset (the first try used 300 pt) therefore left the block overflowed at every width.
+
+  The guess now starts at 400 pt. While the block is overflowed, `backOff()` widens the inset in 40 pt steps until the toolbar shows the block again. A layout counts as pinned only at the requested gap, so a pushed layout cannot be mistaken for one.
+- **Truncation.** The URL field truncates in the middle and the branch pop-up at its tail (cell `lineBreakMode` plus the attributed title's paragraph style), only when the text is wider than the block.
+- **Proof.** Native smoke check `toolbar-address` (core group, `src/native/smoke-toolbar.ts`) resizes to 850, 1800 and the default width. For each, it asserts the frames both inside the resize (`resizeSnapshot`, taken before returning to the run loop) and once settled:
+  - the block stays visible and is never narrower than the pre-LKM-148 formula gave at that geometry;
+  - the gap to the first right group is the fixed 20 pt (at least 16 pt at the floor);
+  - the right groups keep one pinned inset that equals the measured one;
+  - the trailing edges match inside the resize and once settled;
+  - at the wide width, neither URL nor branch is truncated.
+
+  It writes `toolbar-{minimum,wide,default}.png` and `toolbar-address.json`.
+## 2026-10-01 — LKM-146: dependency changes never break the preview
+
+- **Reproduction findings.** These come from the code paths and fixture tests. Real Next/Vite servers with network installs could not run in this sandbox: no local port binding, no registry.
+  - **Vite and every other non-Next project.** The chat worktree's `node_modules` was a symlink to the live one. An agent's `npm install x` / `bun add x` / `pnpm remove x` in the chat wrote straight into the live `node_modules` mid-turn, under the running dev server, while the live `package.json` and lockfile were unchanged. Vite's prebundled deps went stale for a package that changed underneath. A removed package that live code still imports stops resolving before anything lands. A parked or discarded turn leaves the live dependencies changed anyway.
+  - **Next.** Next already installed into the worktree because Turbopack cannot follow the link, so the live tree was safe.
+  - **Landing (both).** Landing manifests already restarted the server, but the install ran inside `devserver:start` under "Opening X…". There was no install state and no explicit reload step.
+  - **Crashes.** A dev server that crashed or hung after it was ready left the preview dead. The runtime `exit` event only cleared the agent-evidence URL mirror, the status stayed `running`, and nothing restarted the server.
+- **Chosen isolation: every worktree gets its own `node_modules`.** Blocking installs and routing them through landing was rejected: the agent could not build or test with the dependency it just added. Detaching only when an install starts cannot be enforced either, because Trezi never sees the agent's shell commands before they run. `EditingProject.dependencyState` (Swift, repository lane) does three things:
+  - removes a legacy link;
+  - when the live folder is Git-ignored and the manifests and lockfile match, clones it with one APFS `clonefile(CLONE_NOFOLLOW)` and marks it;
+  - otherwise reports that an install is needed, which `provisionDependencies` runs in the worktree and then marks.
+
+  Measured: 0.36 s for a 12.6k-file `node_modules`, against 1.6 s for a file-by-file copy, with near-zero extra disk until either side writes. An unignored `node_modules` is never copied. The marker in the worktree's `.trezi/` is excluded by name like the rest of `.trezi/`. `createWorktree` never asks the repository owner for the link any more; the `linkNodeModules` flag stays in the protocol and is always false.
+- **Landing.** `select()` stops the server, then sets `{busy: 'Installing dependencies…'}` while the new `devserver:install` route installs in the live checkout (repository write queue). It then starts the server and reloads the preview (`preview:load`).
+- **Recovery.**
+  - The runtime owner's `exit` event now carries a `reason`: the exit code plus the output tail.
+  - A ready server is health-probed every 10 s with a 10 s timeout. Three misses stop its group, with the reason "The dev server stopped responding." Any HTTP status counts as alive.
+  - `src/native/preview-supervisor.ts` turns the exit into an error status with the reason, "Restarting in N s…" and `restart: true` (PreviewStatus shows **Restart** instead of Retry), and restarts the server after 1, 2, 4, 8 and 16 s. After that it leaves Restart to the user. A manual Restart, a landing or another project cancels the pending attempt, and a server that stayed up for 60 s starts the backoff over. The reason is also appended to Activity.
+- **Exit tails.** `ManagedProcess` read output and observed the exit on separate threads, so `onExit` sometimes ran before the last output line (the error) arrived. Once the group is gone, it now waits for the reader's EOF, up to 0.5 s, before `onExit`. This improves the pre-ready failure messages too.
+- **Tests.**
+  - `editing-owner` `dependencies`: the clone, its isolation from live, the marker, changed manifests and unignored folders.
+  - `chat-worktrees`: a chat's add or remove leaves live `node_modules` untouched until landing, and landing moves no `node_modules` file.
+  - `native-workspace-controller`: stop → install (shown) → start → load.
+  - `preview-supervisor` (new, unit): backoff, give-up, cancel and stable reset.
+  - `runtime-owner` `exit and health`: the exit reason, an unresponsive stop, and no event on stop. It uses the fixture's `RUNTIME_PROBE_FILE` so it needs no socket.
+## 2026-10-01 — LKM-145: Token counter only while working; Copy/Revert on hover
+
+- **Counter.** `ChatTurnFooter` (`ChatActivity.swift`) puts the running counter (LKM-147's per-turn `activity.tokens`) on its own 14 pt line under the status, never after the tool name. Finished responses render no counter, and the footer always reserves that line, so completion keeps its frame. Completion also adds the "Worked for …" caption at the top of the response, which pushed the pinned transcript up; a hidden placeholder of the same caption now holds that line while the turn runs.
+- **Copy/Revert.** Always laid out. `ChatActionButtonStyle(revealed:)` draws the glyph (and hover fill) clear until the row is hovered (`onHover` over the whole row, `contentShape`) or one of its buttons has keyboard focus (`@FocusState`). Opacity and `hidden()` were avoided so the buttons stay focusable accessibility elements; each has an explicit `accessibilityLabel` matching its tooltip. User messages have no action buttons today; the hover rule lives on the shared row.
+- **Verification hook.** `chatAcceptance` takes `hoverMessage` (id, `""` = none, `null` = real pointer) → `ChatModel.hoverOverride`, so captures do not depend on where the cursor rests. `chatInspect`/`chatAcceptance` report `revealedActions`.
+- **Proof.** The `native-chat-scroll` `progress` stage at 440/320 pt (merged with LKM-147's checks): on completion no `-tokens` frame, footer, question and response top unchanged; Copy/Revert not revealed; with the hover override revealed, and the message and footer frames identical with and without hover. Captures `progress-running-*`, `progress-done-*`, `progress-hover-*`.
+- **Limit.** The SwiftUI accessibility tree is empty without an assistive client (checked with an offscreen probe), so VoiceOver labels and Full Keyboard Access reachability are not asserted at runtime. The first native attempt was blocked by an operator Keychain prompt (`SecurityAgent` frontmost); after it cleared, `bun run test:native` passed in full (22 smokes + native-chat-scroll). The footer is compared by position and height, since its width follows its content (status label, then the buttons). Those results and captures are from before merging candidate b677d649 (LKM-147); the merged Swift is re-proved by the manager's native run.
 ## 2026-10-01 — LKM-147: live turn progress (step timer, streaming tokens, heartbeat)
 
 - **Two status lines.** The owner's "Still thinking…" (LKM-135) was a `status` event, so it became both a transcript tools row and the activity label. It is now a `progress` event with a `step`: `reduce` shows the step as the label and appends nothing. `ProviderFrames.swift` accepts `progress` (optional bounded `step`) and, like `commands`, does not count it as heard, so the first-event deadline is unchanged.

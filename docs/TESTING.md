@@ -276,7 +276,8 @@ full suite.
   (`MIN_SDK` in `scripts/requirements.mjs`). That image's default Xcode 26
   provides it, so the job needs no `xcode-select`. An Ubuntu runner cannot build
   them, and an older macOS image ships an older SDK. The "Toolchain" step prints
-  the selected Xcode and `swiftc --version`, then runs
+  the selected Xcode, `swiftc --version` and `git --version` (Git's wording
+  differs between versions, LKM-150), then runs
   `bun scripts/requirements.mjs --build`. If the image ever ships an older SDK,
   that step fails before any tests run.
 - **Commands**, in order:

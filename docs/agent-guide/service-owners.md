@@ -108,7 +108,8 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   stays a JS helper
                   (docs/SWIFT-BACKEND-RUNTIME.md)
   RepositoryOwner.swift / RepositoryEffects.swift / RepositoryLanding.swift /
-  RepositoryCleanup.swift / RepositoryMerge.swift / RepositoryJournal.swift / RepositoryGit.swift   the repository coordinator
+  RepositoryCleanup.swift / RepositoryMerge.swift / RepositoryJournal.swift / RepositoryGit.swift /
+  GitMessages.swift   the repository coordinator
                   (LKM-95): one FIFO lane per repository common directory (Bun's
                   `enqueueRepoWrite` becomes a lease on it), every Trezi Git effect
                   (worktrees, landings, live commits, branch switches, recovery),
@@ -162,7 +163,8 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   Undo); hash-bound commits of the project sidecars in .trezi/
                   (control-panels.json, and since LKM-102 annotations.json and
                   tokens.json) in the repository lane, plus the sidecar migration,
-                  setup helpers and Next dependency marker (EditingProject), and
+                  setup helpers and each worktree's own node_modules (clone)
+                  and dependency marker (EditingProject), and
                   the one-time legacy-name migration (EditingLegacyNames);
                   deferred open_preview navigation. Bun keeps the JS helpers
                   and views (main/chat-islands.ts, native/navigation-controller.ts, native/turn-boundaries.ts); Bun's

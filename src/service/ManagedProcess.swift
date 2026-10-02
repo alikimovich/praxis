@@ -117,6 +117,7 @@ final class ManagedProcess: @unchecked Sendable {
             }
         }
         let reader = output[0], watchdogPID = watchdog, watchdogLifetime = lifetimeWriter
+        let drained = DispatchSemaphore(value: 0)
         Thread.detachNewThread {
             var buffer = [UInt8](repeating: 0, count: 64 * 1024)
             while true {
@@ -126,6 +127,7 @@ final class ManagedProcess: @unchecked Sendable {
                 onOutput(Data(buffer[..<count]))
             }
             close(reader)
+            drained.signal()
         }
         Thread.detachNewThread { [process] in
             var info = siginfo_t()
@@ -140,6 +142,9 @@ final class ManagedProcess: @unchecked Sendable {
             if watchdogLifetime >= 0 { close(watchdogLifetime) }
             var raw: Int32 = 0
             while waitpid(pid, &raw, 0) < 0 && errno == EINTR {}
+            // The group is gone, so its last output (an error message) arrives at once;
+            // `onExit` reads the tail. Bounded for a writer that left the group.
+            _ = drained.wait(timeout: .now() + 0.5)
             // Before waiters wake: whoever stopped it sees the owner's bookkeeping done.
             onExit(process, raw)
             process.condition.lock()

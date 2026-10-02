@@ -15,7 +15,7 @@ import { createRequire } from 'node:module'
 import { detectNext, NEXT_LOADER_CONTENT, NEXT_ADAPTER_CONTENT } from '../src/main/setup-next.ts'
 import { REACT_HELPER_CONTENT } from '../src/main/setup-react.ts'
 import { editingOwner } from '../src/main/editing-owner.ts'
-import { provisionNextDependencies } from '../src/main/worktree-dependencies.ts'
+import { provisionDependencies } from '../src/main/worktree-dependencies.ts'
 import { setupPrompt } from '../src/shared/setup-prompt.ts'
 import { typescriptProps } from '../src/main/props-typescript.ts'
 const require = createRequire(import.meta.url)
@@ -221,11 +221,11 @@ try {
     installs++
     await mkdir(join(destination, 'node_modules'), { recursive: true })
   }
-  await provisionNextDependencies(root, checkout, install)
-  await provisionNextDependencies(root, checkout, install)
+  await provisionDependencies(root, checkout, install)
+  await provisionDependencies(root, checkout, install)
   assert.equal(installs, 1)
   await writeFile(join(checkout, 'bun.lock'), 'changed-lock')
-  await provisionNextDependencies(root, checkout, install)
+  await provisionDependencies(root, checkout, install)
   assert.equal(installs, 2)
   const prompt = setupPrompt({
     framework: 'next',

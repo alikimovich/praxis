@@ -12,9 +12,10 @@ import type { ControlPanelManifest } from '../shared/api'
  *   `annotations.json` and `tokens.json`), committed only if the file still holds the
  *   bytes Bun read, in the repository lane;
  * - the project's other `.trezi/` files (S15): the pre-rename sidecar migration, the
- *   setup helpers a chat worktree carries and the Next dependency marker, run in the
- *   same lane (`EditingProject.swift`; Bun still runs the install between the two
- *   dependency calls);
+ *   setup helpers a chat worktree carries and the worktree's own `node_modules` (a
+ *   clone of the live one, LKM-146) with its dependency marker, run in the same lane
+ *   (`EditingProject.swift`; Bun still runs an install between the two dependency
+ *   calls when no clone fits);
  * - deferred preview navigation (`open_preview`), released when its turn lands.
  * Bun keeps the JS helpers (manifest validation, Jev composition, literal
  * resolution and splicing, source proposals), the isolated WebKit instrumentation and
@@ -87,7 +88,8 @@ export interface EditingOwner {
   migrateNames(root: string, confirmed: boolean): Promise<LegacyNamesResult>
   /** Copies the live project's setup helpers into a worktree (verified, hashes recorded). */
   syncSetupHelpers(liveRoot: string, worktree: string): Promise<void>
-  /** Removes a Next checkout's shared `node_modules` link; answers whether it needs its own install. */
+  /** Gives a checkout its own `node_modules` (removes a link to the live one, clones the live
+   *  folder when the manifests match); answers whether it still needs its own install. */
   dependencyState(liveRoot: string, checkout: string): Promise<boolean>
   /** Records the manifests the checkout's install ran against. */
   markDependencies(liveRoot: string, checkout: string): Promise<void>

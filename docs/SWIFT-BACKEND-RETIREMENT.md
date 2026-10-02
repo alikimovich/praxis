@@ -65,9 +65,11 @@ Moved in this step:
   1 MiB (about 500 notes at the 2000-character maximum).
 - The other `.trezi/` files, by the editing owner in the repository lane
   (`EditingProject.swift`): the legacy sidecar migration ([legacy names](agent-guide/legacy-names.md)), the setup helpers a
-  chat worktree carries (with `setup-helpers.json`) and the Next dependency marker
+  chat worktree carries (with `setup-helpers.json`) and every worktree's own
+  `node_modules` (an APFS clone of the live one since LKM-146) with its dependency marker
   (`.trezi/dependencies.sha256`). Bun keeps only the orchestration: it asks the owner,
-  runs the install through the service installer, then asks it to record the marker.
+  runs the install through the service installer when no clone fits, then asks it to
+  record the marker.
   The legacy twins are `sidecar-migrate.ts`, `setup-artifacts.ts` and
   `editing-model.ts`. A `.trezi` (or legacy) folder or a helper that is a link is
   refused (the old code followed it).
@@ -252,6 +254,7 @@ retirement). LKM-111 removed the `rollback` class with the writers it listed.
 | `src/native/smoke-sheets.ts` | test | — | smoke fixture |
 | `src/native/smoke-sidebar.ts` | test | — | smoke fixture |
 | `src/native/smoke-source-editor.ts` | test | — | smoke fixture |
+| `src/native/smoke-toolbar.ts` | test | — | smoke fixture |
 
 A row whose module no longer has an effect fails the test too, so a transfer removes
 its row and the gate count in the same change.

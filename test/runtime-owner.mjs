@@ -235,6 +235,40 @@ try {
     await stop(fixture)
   })
 
+  // LKM-146: a ready server that ends by itself, or stops answering, is reported with why.
+  await section('exit and health', async () => {
+    const up = join(dir(), 'up')
+    write(up, '')
+    const fixture = await start(dir(), { RUNTIME_PROBE_FILE: up, RUNTIME_HEALTH_INTERVAL: '0.1', RUNTIME_HEALTH_FAILURES: '3', RUNTIME_READY_TIMEOUT: '5' })
+    const runtime = fixture.runtime()
+    const exits = []
+    runtime.onExit((root, url, reason) => exits.push({ root, url, reason }))
+    const project = dir()
+    const crashing = await runtime.start({ root: project, command: `echo serving; while [ ! -f "${project}/crash" ]; do sleep 0.05; done; echo "Error: boom"; exit 2` })
+    write(join(project, 'crash'), '')
+    const crashed = await until(() => exits[0], 5000, 'the exit event')
+    assert.deepEqual([crashed.root, crashed.url], [project, crashing.url])
+    assert.match(crashed.reason, /^The dev server exited \(code 2\)\.\n[\s\S]*Error: boom/)
+    assert.deepEqual(await runtime.info(project), { running: false })
+    // Unanswered probes in a row stop the group; its exit says it stopped responding.
+    const hung = await runtime.start({ root: project, command: `echo $$ > "${project}/hung.pid"; while true; do sleep 0.05; done` })
+    const pid = await pidIn(join(project, 'hung.pid'))
+    await sleep(500)
+    assert.ok(alive(pid) && exits.length === 1, 'a server that answers is left alone')
+    rmSync(up)
+    const stopped = await until(() => exits[1], 5000, 'the unresponsive exit')
+    assert.deepEqual(stopped, { root: project, url: hung.url, reason: 'The dev server stopped responding.' })
+    await dead(pid)
+    assert.ok(fixture.logs.includes(`The dev server stopped responding at ${hung.url}; stopping it.`))
+    // A stop is not an exit the preview recovers from.
+    write(up, '')
+    await runtime.start({ root: project, command: 'while true; do sleep 0.05; done' })
+    await runtime.stop(project)
+    await sleep(300)
+    assert.equal(exits.length, 2, 'a stop emits no exit event')
+    await stop(fixture)
+  })
+
   await section('installs', async () => {
     const bin = dir()
     write(join(bin, 'npm'), `#!/bin/sh
@@ -293,6 +327,10 @@ exit 0
     await until(() => logs.includes('installing'), 5000, 'install output')
     await handlers.get('devserver:stop')({}, project)
     await assert.rejects(started, /Preview start was cancelled\./)
+    // A landing's install runs on its own route, in the given checkout (LKM-146).
+    logs.length = 0
+    await handlers.get('devserver:install')({}, project)
+    assert.ok(logs.includes('installing') && logs.some(line => line.startsWith('Installing project dependencies with npm')))
     await assert.rejects(handlers.get('devserver:start')({}, { root: project, command: 'echo nope; exit 9' }), /code 9/)
     assert.deepEqual(await handlers.get('devserver:info')({}, project), { running: false })
     assert.equal(await handlers.get('devserver:running')({}, project), false)
