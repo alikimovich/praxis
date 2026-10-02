@@ -2,6 +2,14 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-144 repair: `acceptance-440-1-lines` fails on the merged LKM-145/147 layout (open)
+
+- **Failure.** `test/native-chat-scroll.mjs` stops at `acceptance-440-1-lines: complete latest row above composer clearance`, deterministically (three native runs: manager, and two here). The 40-history fixture sits pinned (`pinned` true, `scrollY` ≈ `documentHeight − viewportHeight`), but the latest row's frame is at y ≈ 1144 against a 776 pt viewport, and rows realized after it have irregular gaps (60 and 20 pt extra between rows 38/39/latest). The pin reports 379 pins. The same test passed on `a542012`, before the LKM-145/147 merge.
+- **Not LKM-144.** The fixture pushes `chatState` straight to the host with a Codex provider, bypassing `NativeChatController.run`, the only controller code LKM-144 touched. The merge (`df1a327`) changed `ChatTurnFooter` to always reserve a 14 pt counter row, so every finished assistant row went from 158 to 174 pt, and the lazy stack's estimated document height (6595) is now far under the real one (about 7280). That layout change is the leading suspect; it is not confirmed.
+- **Tried, did not work.** (1) A layout nudge on repeated `.bottom` settle steps in `Chat.settleLatest`: no change in the failure. (2) Every third `.bottom` step scrolling to the latest through SwiftUI with the pin held: acceptance was not reached because it broke `send-visibility` (blank rows at 320 pt, `no visible transcript rows`). Both are reverted; `Chat.swift` equals HEAD.
+- **Kept.** `chatAcceptance` now also reports `bottomPosition` and `settleAttempts`, so the next failing run shows whether the end marker was settled while the row frames were not.
+- **Next step for the LKM-145/147 owner.** Reproduce with `bun test/native-chat-scroll.mjs --require-build`. First try keeping the counter row only for the live or latest turn (history footers back to 28 pt), or make `ChatLatestSettle.step` refuse `.settled` while the latest row's frame is below the reading edge.
+
 ## 2026-10-01 — LKM-144: Keychain rebuild loop, one migration prompt, network-volume note
 
 - **Rebuild loop.** `test/keychain-rebuild.mjs` (unit, exclusive, 300 s budget). Two builds of `Secrets.swift` from different folders with the build's swiftc flags are byte-identical (CDHash `7afd5eab…` ad hoc here). Its `rebuild-read` part, on a password-made temporary keychain, has the rebuild read the first build's item with UI disabled and refuses changed code. A manual probe on a temporary keychain showed:
