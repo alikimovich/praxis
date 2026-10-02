@@ -5,7 +5,8 @@ import Darwin
 // `{"service"…` lines are Bun frames (answers and events go to stdout); `{"cmd"…}`
 // lines are fixture commands. The binary is also its own watchdog (`--watch-group`).
 // RUNTIME_PORT=<n> fixes the allocated port (no bind probe: the sandbox may forbid it).
-// RUNTIME_READY_TIMEOUT / RUNTIME_INSTALL_TIMEOUT / RUNTIME_STAMP_TIMEOUT (seconds).
+// RUNTIME_READY_TIMEOUT / RUNTIME_INSTALL_TIMEOUT / RUNTIME_STAMP_TIMEOUT /
+// RUNTIME_HEALTH_INTERVAL (seconds), RUNTIME_HEALTH_FAILURES.
 // RUNTIME_NO_WATCHDOG=1 leaves crash recovery to the journal alone.
 
 signal(SIGPIPE, SIG_IGN)
@@ -27,6 +28,13 @@ var options = RuntimeOwner.Options(environment: env, watchdog: env["RUNTIME_NO_W
 if let fixed = env["RUNTIME_PORT"].flatMap(Int.init) {
     options.allocatePort = { reserved in var port = fixed; while reserved.contains(port) { port += 1 }; return port }
 }
+// RUNTIME_PROBE_FILE: every probe answers 200 while that file exists (no socket needed).
+if let file = env["RUNTIME_PROBE_FILE"] {
+    options.probe = { _ in access(file, F_OK) == 0 ? 200 : nil }
+    options.healthProbe = options.probe
+}
+options.healthInterval = seconds("RUNTIME_HEALTH_INTERVAL", 10)
+options.healthFailures = Int(seconds("RUNTIME_HEALTH_FAILURES", 3))
 options.readyTimeout = seconds("RUNTIME_READY_TIMEOUT", 90)
 options.installTimeout = seconds("RUNTIME_INSTALL_TIMEOUT", 300)
 options.stampTimeout = seconds("RUNTIME_STAMP_TIMEOUT", 5)

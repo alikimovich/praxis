@@ -11,6 +11,28 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Network volume: the access comes from the Claude CLI process, outside its own Bash sandbox, so no Trezi setting can stop it while the sandbox stays on. Documented, plus a one-time status line on the first Claude turn (`src/native/network-volume-note.ts`, `test/network-volume-note.mjs`).
 - [x] Bundle ID `dev.praxis.native` kept and recorded as legacy (`docs/agent-guide/legacy-names.md`).
 - [ ] Manager/operator: run the login-keychain steps in `docs/PROVIDERS.md` (LKM-144) on the operator Mac. Record whether a `cdhash:` partition exists and whether a rebuild asks again. Also run `bun run test:keychain-rebuild` outside a sandbox so `rebuild-read` PASSes rather than SKIPs.
+## Chat footer regression from LKM-145/147 (LKM-149)
+
+- [x] Counter line only on the running turn; the latest response keeps it empty once done (completion moves nothing), and older responses have one 28 pt footer row (`ChatLayout.footerHeight`).
+- [x] `ChatLatestSettle.step` never settles while the latest row is below (or not measured at) the reading edge: it relayouts in place (`.relayout`) and re-measures. A pin unresolved three times relayouts too; settled must hold on two consecutive frames; the marker nudge is reset when a settle ends.
+- [x] Tests: `native-chat-latest-settle` (`--cases`: settle/relayout/escalation decisions and 28/44 pt footer heights; offscreen samples end at the reading edge without exhausting the settle), `native-chat-scroll` progress stage (running footer 44 pt, history footers 28 pt) and chat acceptance (every capture: history footers 28 pt, latest 44 pt).
+- [ ] Manager: repeated chat-acceptance passes (the worker had 3 native calls; see PROGRESS).
+## Git-version-independent patch error messages (LKM-150)
+
+- [x] Parser: `src/service/GitMessages.swift` parses each `git apply` `error:` line into reason, file and line; both location spellings (2.50 "line N", 2.55 "<patch>:N") read the same and no scratch patch path reaches a message.
+- [x] Tests: `test/git-messages.mjs` (unit) pins recorded 2.50 and 2.55 stderr; the real-git `malformed-patch` section asserts the parsed fields.
+- [x] Audit: the three-way conflict check reads unmerged index entries instead of Git's text; the publish push retry keys on the untranslated ref status (`GitMessages.pushRejected`). No other Git-stderr match in `src/service` or `src/main`.
+- [x] CI prints `git --version` in the Toolchain step.
+- [ ] Manager: confirm on the next candidate CI run (git 2.55 runner).
+
+## Dependency changes never break the preview (LKM-146)
+
+- [x] Reproduction findings documented (PROGRESS 2026-10-01). A chat install wrote through the `node_modules` link into the live tree; a crashed server left the preview dead.
+- [x] Worktree isolation: each worktree has its own `node_modules`, an APFS clone of the live one when the manifests match, otherwise its own install. The legacy link is removed (`EditingProject.dependencyState`, `provisionDependencies`). Rationale in `docs/WORKTREES.md`.
+- [x] Landing: stop → "Installing dependencies…" (`devserver:install`, live checkout) → start → reload preview.
+- [x] Recovery: exit reason plus health probes in the runtime owner; `preview-supervisor.ts` restarts with backoff (1/2/4/8/16 s); PreviewStatus shows the reason and Restart.
+- [x] Tests: editing-owner `dependencies`, chat-worktrees (live untouched), native-workspace-controller (landing order), preview-supervisor (new), runtime-owner `exit and health`.
+- [ ] Manager/operator: on a real Next and a real Vite project, add and remove a dependency in a chat, land it, and confirm the preview comes back by itself. Not possible in the worker sandbox (no port binding or registry).
 
 ## Live turn progress: timer, current step, streaming tokens (LKM-147)
 
@@ -26,6 +48,12 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Tests: `test/signing-identity.mjs`, `test/keychain-migration.mjs`, `test/provider-login.mjs` `helper-cwd`. Docs: README "Code signing" (one more Keychain approval, then none), `docs/PROVIDERS.md`, `docs/agent-guide/legacy-names.md`.
 - [x] Review fixes: an identity that cannot sign (locked keychain, denied key access) re-signs every piece ad hoc with the one warning instead of failing the build; a real "Trezi Local" signature in a temporary keychain proves the designated requirement is the same across two builds.
 - [ ] Manager/operator: after this build, confirm on the operator Mac that `codesign -d -r- out/native/Trezi.app` stays the same across two rebuilds, and that the Keychain asks once and then not again.
+## Token counter only while working; Copy/Revert on hover (LKM-145)
+
+- [x] Counter only while a turn runs, on its own line under the status; finished responses have none. The footer always reserves the counter line (and a hidden "Worked for" placeholder holds its line while running), so completion moves nothing above it.
+- [x] Copy/Revert always laid out, glyphs hidden until the message is hovered or a button has keyboard focus; explicit accessibility labels, still focusable.
+- [x] `native-chat-scroll` `progress` stage: running/done/hover captures at 440/320 pt; frames unchanged on completion and with/without hover (in-app hover override).
+- [ ] Manager/operator: VoiceOver and Full Keyboard Access check of Copy/Revert on a real session (the SwiftUI accessibility tree cannot be read without an assistive client).
 ## Token counter inline; centered scroll-to-latest button (LKM-141)
 
 - [x] No pinned counter above the composer; each turn counts its own tokens on its response (chat total kept in the tooltip and mirror).

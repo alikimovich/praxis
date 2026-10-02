@@ -3,6 +3,7 @@ import { removeSmokeDirectory, saveSmokeFailure, smokeDirectory, writeSmokeProje
 import { NativeUpdateController } from './update-controller'
 import { installNativeInspector } from './inspector-runtime'
 import { NativePreviewRecovery } from './preview-recovery'
+import { NativePreviewSupervisor } from './preview-supervisor'
 import { NativeLegacyNames } from './legacy-names'
 import { NativeRecoveryRefs, recoveryNotices } from './repository-recovery'
 import { NativeLayersController } from './layers-controller'
@@ -448,12 +449,21 @@ async function main() {
   }
   host.on('menu', ({ action }) => { if (['new-project', 'settings', 'feedback', 'diagnose'].includes(action)) openSheet(action) })
   host.on('shell-action', action => { if (action.action === 'rename-chat' && action.id && workspaceController.state.activeKey) sheetController.renameChat(action.id, workspaceController.state.activeKey); if (action.action === 'select' && action.id?.startsWith('history:')) openSheet('review', action.id.slice(8)); if (action.action === 'memory') openSheet('memory', action.project ?? workspaceController.state.activeKey ?? undefined) })
+  const previewSupervisor = new NativePreviewSupervisor(workspaceController)
+  serviceEvents.on('event', (channel, value) => {
+    if (channel !== 'devserver:exit') return
+    activityController.append(value.reason, 'error')
+    previewSupervisor.exited(value)
+  })
   host.on('native-preview-action', action => {
     if (workspaceController.state.activeKey !== action.project) return
     if (action.action === 'logs') activityController.action('show')
     else if (action.action === 'servers') previewRecovery.open(action.project)
     else if (action.action === 'diagnose') openSheet('diagnose')
-    else if (action.action === 'run') void workspaceController.command({ type: 'restart', key: action.project, ...(action.command?.trim() ? { command: action.command.trim() } : {}) }).catch(error => activityController.append(String(error), 'error'))
+    else if (action.action === 'run') {
+      previewSupervisor.reset()
+      void workspaceController.command({ type: 'restart', key: action.project, ...(action.command?.trim() ? { command: action.command.trim() } : {}) }).catch(error => activityController.append(String(error), 'error'))
+    }
   })
 
   host.on('view-closed', ({ view }) => {

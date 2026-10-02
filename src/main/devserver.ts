@@ -34,4 +34,9 @@ export function registerDevServerIpc(
     const wc = getWindow()?.webContents
     if (wc && !wc.isDestroyed()) wc.send('devserver:log', line)
   })
+  // A ready server that ended by itself: the preview restarts it (LKM-146).
+  runtime.onExit((root, url, reason) => {
+    const wc = getWindow()?.webContents
+    if (wc && !wc.isDestroyed()) wc.send('devserver:exit', { root, url, reason })
+  })
 }

@@ -15,7 +15,8 @@
 //   themselves (with-service-owners.mjs).
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -284,6 +285,56 @@ try {
     console.log('turns: origin and navigation bound to the conversation owner’s turn; loads only in the asking chat')
   }
 
+  // ── dependencies: a worktree owns a copy-on-write clone of live node_modules (LKM-146) ──
+  {
+    const fixture = await start(dir('deps'))
+    const { editing } = fixture.owners()
+    const git = (cwd, ...args) => { const r = spawnSync('git', args, { cwd, encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r.stdout }
+    const project = (name, ignore) => {
+      const live = dir(name, 'live')
+      git(live, 'init', '-q')
+      if (ignore) writeFileSync(join(live, '.gitignore'), ignore)
+      writeFileSync(join(live, 'package.json'), '{"dependencies":{"a":"1"}}')
+      mkdirSync(join(live, 'node_modules', 'a', 'lib'), { recursive: true })
+      writeFileSync(join(live, 'node_modules', 'a', 'lib', 'index.js'), 'a1')
+      symlinkSync('../a/lib/index.js', join(live, 'node_modules', 'a', 'bin.js'))
+      const checkout = dir(name, 'checkout')
+      writeFileSync(join(checkout, 'package.json'), '{"dependencies":{"a":"1"}}')
+      return { live, checkout }
+    }
+    const listing = path => readdirSync(path, { recursive: true }).sort().join(',')
+    const { live, checkout } = project('ignored', 'node_modules\n')
+    // A worktree from before LKM-146 still links the live folder: the link goes, a clone replaces it.
+    symlinkSync(join(live, 'node_modules'), join(checkout, 'node_modules'))
+    const before = listing(join(live, 'node_modules'))
+    assert.equal(await editing.dependencyState(live, checkout), false, 'A clone needs no install')
+    assert.ok(lstatSync(join(checkout, 'node_modules')).isDirectory(), 'The checkout owns a real folder')
+    assert.equal(listing(join(checkout, 'node_modules')), before, 'The clone has the live tree')
+    assert.equal(readlinkSync(join(checkout, 'node_modules', 'a', 'bin.js')), '../a/lib/index.js', 'Links inside are cloned, not followed')
+    assert.notEqual(statSync(join(checkout, 'node_modules', 'a', 'lib', 'index.js')).ino, statSync(join(live, 'node_modules', 'a', 'lib', 'index.js')).ino)
+    assert.ok(existsSync(join(checkout, '.trezi', 'dependencies.sha256')), 'The clone is marked')
+    // What an agent's add and remove do to the clone never reaches the live folder.
+    writeFileSync(join(checkout, 'node_modules', 'a', 'lib', 'index.js'), 'a2')
+    mkdirSync(join(checkout, 'node_modules', 'b'))
+    rmSync(join(checkout, 'node_modules', 'a', 'bin.js'))
+    assert.equal(listing(join(live, 'node_modules')), before, 'Live node_modules untouched')
+    assert.equal(readFileSync(join(live, 'node_modules', 'a', 'lib', 'index.js'), 'utf8'), 'a1')
+    assert.equal(await editing.dependencyState(live, checkout), false, 'Unchanged manifests: still marked')
+    writeFileSync(join(checkout, 'package.json'), '{"dependencies":{"a":"1","b":"1"}}')
+    assert.equal(await editing.dependencyState(live, checkout), true, 'Changed manifests install into the checkout')
+    // Manifests that differ from live are not cloned: the checkout installs its own.
+    const fresh = dir('ignored', 'fresh')
+    writeFileSync(join(fresh, 'package.json'), '{"dependencies":{"c":"1"}}')
+    assert.equal(await editing.dependencyState(live, fresh), true)
+    assert.equal(existsSync(join(fresh, 'node_modules')), false)
+    // A node_modules Git does not ignore is never copied (or linked) in.
+    const tracked = project('unignored', '')
+    assert.equal(await editing.dependencyState(tracked.live, tracked.checkout), false)
+    assert.equal(existsSync(join(tracked.checkout, 'node_modules')), false)
+    await fixture.stop()
+    console.log('dependencies: a clone replaces the live link; agent installs in it leave live node_modules alone')
+  }
+
   // ── lanes: a sidecar commit waits for another chain's lease, runs inside its own ──
   {
     const profile = dir('lanes'), root = dir('lanes-project')
@@ -358,7 +409,7 @@ try {
     await fixture.stop()
     console.log('schema and drain: malformed, unknown, scoped and post-drain requests refused')
   }
-  console.log('EDITING-OWNER OK — parity, turns, lanes, crash, drain and schema')
+  console.log('EDITING-OWNER OK — parity, turns, dependencies, lanes, crash, drain and schema')
 } finally {
   for (const fixture of fixtures) await fixture.kill().catch(() => {})
   rmSync(scratch, { recursive: true, force: true })

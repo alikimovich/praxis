@@ -1,4 +1,4 @@
-import { provisionNextDependencies } from './worktree-dependencies'
+import { provisionDependencies } from './worktree-dependencies'
 import { editingOwner } from './editing-owner'
 import { execFile } from 'child_process'
 import { lstat, readFile } from 'fs/promises'
@@ -75,14 +75,15 @@ export function createChatWorktree(
 /**
  * Turn-start drift sync (live → worktree). The owner snapshots the live tree; when the
  * worktree's HEAD tree already matches there's no drift, otherwise it resets the clean
- * worktree onto the snapshot (sparing the symlinked runtime deps). Advances
+ * worktree onto the snapshot (sparing its runtime deps) and refreshes its own
+ * node_modules when the synced manifests changed. Advances
  * `wt.baseSha` in place to the new fork point.
  */
 export async function syncFromLive(liveRoot: string, wt: Worktree): Promise<{ synced: boolean }> {
   await editingOwner().syncSetupHelpers(liveRoot, wt.path)
   const { synced, baseSha } = await repositoryOwner().syncWorktree({ ...wt, repoRoot: liveRoot })
   wt.baseSha = baseSha
-  await provisionNextDependencies(liveRoot, wt.path)
+  await provisionDependencies(liveRoot, wt.path)
   return { synced }
 }
 

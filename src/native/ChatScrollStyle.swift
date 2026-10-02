@@ -9,7 +9,16 @@ enum ChatLayout {
     /// Row height of a response's live status and of its Copy/Revert buttons
     /// (ChatTurnFooter), so completion swaps rows without a layout jump.
     static let footerRowHeight: CGFloat = 28
+    /// The running counter's own line under the status, kept on the latest response.
     static let footerCountHeight: CGFloat = 14
+    static let footerCountSpacing: CGFloat = 2
+    /// Only the running turn shows the counter line, and the latest response keeps
+    /// it empty once done, so completion moves nothing. Older responses drop it,
+    /// so history footers stay one 28 pt row (LKM-149).
+    static func footerReservesCount(running: Bool, latest: Bool) -> Bool { running || latest }
+    static func footerHeight(running: Bool, latest: Bool) -> CGFloat {
+        footerReservesCount(running: running, latest: latest) ? footerRowHeight + footerCountSpacing + footerCountHeight : footerRowHeight
+    }
     static func composerFrame(in bounds: CGRect, height: CGFloat) -> CGRect {
         CGRect(x: bounds.minX + composerInset,
                y: bounds.minY + max(0, bounds.height - composerInset - height),
@@ -41,13 +50,28 @@ enum ChatLatestSettle: Equatable {
     case realize(String)
     /// Rows are in view but the end is not at the reading edge: pin to the end.
     case bottom
+    /// The marker is at the reading edge but the latest row is not measured
+    /// there (LKM-149): relayout the stack in place (the 1pt marker change), so
+    /// its frames are measured for the clip's actual offset, and pin.
+    case relayout
     /// `frames` are the realized rows and `bottom` the end marker's maxY, both
     /// in viewport coordinates. Only the realized marker proves the end is in
     /// view: the latest row's frame can still be the one laid out before the
-    /// pin moved the clip.
+    /// pin moved the clip. The marker alone is not enough either (LKM-149): it
+    /// can be measured before the latest row's own layout (its footer) lands,
+    /// so settled also needs the latest row to end at the reading edge.
     static func step(latest: String?, frames: [String: CGRect], bottom: CGFloat, readingHeight: CGFloat, viewportHeight: CGFloat) -> ChatLatestSettle {
         if let latest, !frames.values.contains(where: { $0.maxY > 0 && $0.minY < viewportHeight }) { return .realize(latest) }
-        return bottom > 0 && bottom <= readingHeight + 1 ? .settled : .bottom
+        guard bottom > 0 && bottom <= readingHeight + 1 else { return .bottom }
+        if let latest, (frames[latest]?.maxY ?? .infinity) > readingHeight + 1 { return .relayout }
+        return .settled
+    }
+    /// The action for a step after `unresolved` consecutive `.bottom` steps. A
+    /// pin unresolved after three tries means SwiftUI's layout disagrees with
+    /// AppKit's end: the clip is already there, so another pin moves nothing.
+    /// Every third one relayouts instead, like `.relayout`.
+    static func escalated(_ step: ChatLatestSettle, unresolved: Int) -> ChatLatestSettle {
+        step == .bottom && unresolved > 0 && unresolved % 3 == 0 ? .relayout : step
     }
     /// The SwiftUI scroll for the `stuck`-th consecutive realize step. A stack
     /// whose estimates are far off can stay empty at the latest row; every
@@ -57,14 +81,21 @@ enum ChatLatestSettle: Equatable {
         if stuck % 4 == 3, let first { return (first, .top) }
         return (latest, .bottom)
     }
-    /// Steps once per frame while `current`; returns the attempts used.
+    /// Steps once per frame while `current`; returns the attempts used. Settled
+    /// counts only when the next frame measures it again, so a reading taken
+    /// before the rows' own layout (footer, counter line) lands cannot end it.
     @MainActor
     static func run(attempts: Int = 20, current: () -> Bool, step: () -> ChatLatestSettle, scroll: (ChatLatestSettle) -> Void) async -> Int {
+        var settledOnce = false
         for attempt in 1...attempts {
             try? await Task.sleep(nanoseconds: 16_000_000)
             guard current() else { return attempt }
             let next = step()
-            if next == .settled { return attempt }
+            if next == .settled {
+                if settledOnce { return attempt }
+                settledOnce = true; continue
+            }
+            settledOnce = false
             scroll(next)
         }
         return attempts

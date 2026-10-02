@@ -20,6 +20,7 @@ import { checkNativeSheets } from './smoke-sheets'
 import { checkSecuritySession } from './smoke-session'
 import { checkNativeChat } from './smoke-chat'
 import { checkSelectionInput, preparePreviewInput } from './smoke-input'
+import { checkToolbarAddress, restoreToolbarAddress } from './smoke-toolbar'
 import { formatSmokeSummary, parseInjectedFailures, runSmokeChecks, type SmokeCheck } from './smoke-runner'
 import { captureSmokeFailure, restoreSmokeState } from './smoke-restore'
 import { parseSmokeGroups, selectSmokeChecks } from './smoke-groups'
@@ -216,6 +217,11 @@ export async function runNativeCoreSmoke(host: NativeBridge, fixture: string, ro
       if ((await host.request('layersInspect')).visible) await host.request('shellPerform',{action:'layers'})
       // A passing run leaves the split at fraction 1; expand toggles 0 ⇄ 1.
       for (let i = 0; i < 2 && (await host.request('layoutInspect')).fraction !== 1; i++) { await host.request('shellPerform',{action:'expand'}); await delay(300) }
+    } },
+    { name: 'toolbar-address', dependsOn: ['chat-ready'], run: async () => {
+      await checkToolbarAddress(host, artifacts)
+    }, cleanup: async () => {
+      await restoreToolbarAddress(host)
     } },
     { name: 'selection-input', dependsOn: ['open-project'], run: async () => {
       await host.request('shellPerform',{action:'select-object'})

@@ -317,9 +317,7 @@ struct WorkflowPublish {
             } catch {
                 let failure = error as? GitFailure
                 let text = "\(error)\n\(failure?.stdout ?? "")"
-                let moved = text.range(of: #"non-fast-forward|fetch first|failed to push some refs|\[rejected\]"#,
-                                       options: [.regularExpression, .caseInsensitive]) != nil
-                if attempt == maxAttempts || !moved { throw error }
+                if attempt == maxAttempts || !GitMessages.pushRejected(text) { throw error }
             }
         }
         throw RepositoryRefusal(.conflict, "Publish retry limit reached for \(branch).")

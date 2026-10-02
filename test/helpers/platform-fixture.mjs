@@ -17,7 +17,7 @@ import { skipUnlessDarwin } from './darwin.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 export const SOURCES = ['ServiceContract', 'LedgerStore', 'OperationLedger', 'PreferencesFile', 'PreferencesOwner', 'WorkspaceFile',
-  'WorkspaceOwner', 'DomainChannel', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'RepositoryGit',
+  'WorkspaceOwner', 'DomainChannel', 'ManagedProcess', 'RuntimeNet', 'RuntimeDetect', 'StaticSite', 'StaticServer', 'RepositoryGit', 'GitMessages',
   'RepositoryJournal', 'RepositoryEffects', 'RepositoryLanding', 'RepositoryCleanup', 'RepositoryMerge', 'RepositoryOwner', 'SourcePaths', 'PlatformTools', 'PlatformOpen', 'PlatformMedia',
   'SimulatorTools', 'SimulatorBridge', 'SimulatorOwner', 'PlatformOwner'].map(name => `src/service/${name}.swift`)
 

@@ -297,9 +297,18 @@ export class NativeWorkspaceController {
           if (entry.previewKind === 'simulator' && !current()) return
           const info = entry.previewKind === 'simulator' ? null : await this.services.invoke('devserver:info', entry.root)
           if ((restart || entry.environmentRevision) && info?.running) await this.services.invoke('devserver:stop', entry.root)
-          const server = !restart && !entry.environmentRevision && !command && info?.running ? info.server
+          const reuse = !restart && !entry.environmentRevision && !command && info?.running
+          // Landed manifest changes install in the live checkout with the server stopped,
+          // under their own label, before it starts again (LKM-146).
+          if (!reuse && entry.previewKind !== 'simulator' && entry.dependenciesPending) {
+            if (current()) { this.state.status = { kind: 'busy', label: 'Installing dependencies…' }; this.changed() }
+            await this.services.invoke('devserver:install', entry.root)
+            entry.dependenciesPending = false
+            if (current()) { this.state.status = { kind: 'busy', label: 'Starting ' + entry.name + '…' }; this.changed() }
+          }
+          const server = reuse ? info.server
             : entry.previewKind === 'simulator' ? await this.services.invoke('simulator:start', { root: entry.root, ...(spec.customCommand ? { command: spec.command } : {}) })
-            : await this.services.invoke('devserver:start', { ...spec, installDependencies: !!entry.dependenciesPending })
+            : await this.services.invoke('devserver:start', spec)
           entry.url = server.url; entry.launchSpec = server.attached ? null : spec
           entry.environmentRevision = 0; entry.dependenciesPending = false
         }

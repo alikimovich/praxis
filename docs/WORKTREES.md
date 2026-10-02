@@ -181,13 +181,21 @@ config changes. A provider's earlier `done` and parked/failed outcomes do not
 trigger this refresh. Background projects retain pending refreshes until activated.
 An empty project can open its chat before it has a dev server or application files.
 
-For dependency changes, the preview runner installs in the live checkout through
-its repository write queue before starting the server. Git does not transfer a
+For dependency changes (LKM-146), the workspace controller stops the server, shows
+"Installing dependencies…" in the preview while `devserver:install` runs the
+project's package manager in the live checkout (in its repository write queue),
+then starts the server and reloads the preview. Git does not transfer a
 worktree-local `node_modules` directory. Auto-detected commands/frameworks are
 resolved again; explicit custom launch commands retain their override. Preview
 startup failures leave chat available for repair and expose a retry command.
 This refresh covers landed Git-root work; external file edits and non-isolated
 turns still depend on the framework's own reload behavior or a manual restart.
+
+A ready server that exits, or that the runtime owner stops after three unanswered
+health probes, is not left dead. The preview shows the reason and a Restart button,
+and `src/native/preview-supervisor.ts` restarts it after 1, 2, 4, 8 and 16 s. After
+the last attempt it leaves Restart to the user. A manual Restart, a landing or
+another project cancels the pending attempt.
 
 ## Setup helpers and Next.js validation
 
@@ -197,11 +205,30 @@ the private checkout, verifies the copies, and records paths/SHA-256 hashes in
 `.trezi/setup-helpers.json`. This also handles setup started after a chat's
 worktree already exists. Annotations and other sidecar data are not shared.
 
-Next projects provision dependencies inside the worktree using its package manager,
-manifests, and lockfile. They do not receive the shared `node_modules` symlink;
-existing symlinks are removed before installation. A manifest/lockfile fingerprint
-avoids redundant installs and refreshes changed dependency sets. Ordinary projects
-retain the existing runtime symlink policy. No adapter widens Turbopack's root.
+Every worktree has its own `node_modules`; none links to the live one (LKM-146).
+Before, ordinary projects got a symlink, so an agent's `npm install`/`bun add`/
+`pnpm remove` in a chat wrote straight into the folder the running dev server
+reads. The live dependencies changed mid-turn, before anything landed, and could
+disagree with the live `package.json`. `provisionDependencies`
+(`src/main/worktree-dependencies.ts`, Swift `EditingProject.dependencyState`) runs
+at worktree creation and every turn sync:
+
+- It removes a link left by an older Trezi.
+- When the live `node_modules` is ignored by Git and the worktree's manifests and
+  lockfile match the live ones, it clones the live folder with APFS `clonefile`.
+  This is one copy-on-write call: about 0.4 s for 12.6k files, against 1.6 s for a
+  file-by-file copy. The clone is marked at once.
+- Otherwise (manifests differ, another volume, or a changed fingerprint since the
+  marker) it runs the worktree's own install with the project's package manager,
+  then marks it.
+
+The marker is `.trezi/dependencies.sha256`, a fingerprint of `package.json` and
+the lockfiles. A `node_modules` that Git does not ignore is never copied in.
+
+Isolation was chosen over blocking installs in chats: an agent must be able to add
+a dependency and build or test with it in its own checkout. Detaching only when an
+install starts cannot be enforced, because Trezi does not see the agent's shell
+commands before they run. No adapter widens Turbopack's root.
 
 `workspace_state` exposes the live checkout/revision/dirty state, worktree base,
 preview URL, and latest stamp observation. `servedRevision: null` and

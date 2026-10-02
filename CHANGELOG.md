@@ -23,15 +23,20 @@ Every change that alters user-visible behaviour adds one line under Unreleased.
 - Renamed the app to Trezi; projects that use the earlier setup names are migrated once on open.
 - Builds sign Trezi with a stable local identity when possible so Keychain “Always Allow” and privacy grants survive rebuilds; after updating, approve the Keychain once more, then not again.
 - Connection keys and the subscription token are encrypted through `Contents/Helpers/TreziSecrets`; the master key lives in `dev.trezi.native.secrets`, migrated once from the earlier item name.
+- Chat: the token counter only shows while a turn runs, on its own line under the status; Copy/Revert under a response appear on hover or keyboard focus, without moving the layout.
 - Chat: steadier scrolling and follow behaviour, composer attachments as thumbnails, queued messages, interactive islands in the conversation and more reliable Stop and recovery.
 - Chat: per-turn token counts show inline with the working status while a turn runs and under each response’s Copy/Revert row when it finishes, instead of pinned above the composer; scroll-to-latest is a centered round control just above the composer, with transcript content faded out behind it when you have scrolled up.
+- Preview toolbar: the address/branch block fills the free width up to the right action groups and follows window resizes live; a long URL truncates in the middle and a branch at its end only when space is short.
 - Chat: one live status line names the current step with its elapsed time (“Running bun test · 1:24”), the running turn’s token counter grows as Claude streams and sits on its own line under it until the turn ends, and “No activity for N min” appears only when the provider’s heartbeat stops; the duplicate “Still thinking…” row is gone.
 
 ### Fixed
 - Chat: the transcript no longer goes blank after sending until scrolled.
 - Keychain: moving the master key from the earlier item asks for your password once instead of once per saved key, and no longer asks again when you take a while to answer.
 - Chat: the first Claude chat explains once why macOS may ask about files on a network volume.
+- Chat: following the conversation no longer leaves the latest message partly under the composer; past responses are compact again, without the empty counter line under Copy/Revert.
 - Check login and provider helpers no longer use your home folder as the working directory, which could make macOS ask Trezi for Photos access when Claude scanned `~/Pictures`.
+- Preview: dependency changes no longer break it. A chat's installs stay in its own worktree until they land; landing shows "Installing dependencies…" and reloads the preview. A dev server that crashes or stops responding shows why and restarts itself with backoff, with a Restart button.
+- Applying a chat's changes: on newer Git (2.55) an unreadable patch reports the file and line (e.g. "a.txt: corrupt patch at line 7") instead of a temporary patch path, as on older Git.
 
 ### Removed
 - The Electron app, the React renderer, browser and Tailscale modes, and the old in-page content controls.
