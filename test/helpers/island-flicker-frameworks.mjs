@@ -132,8 +132,10 @@ try {
       framework: 'next',
       urlPath: '/shadow-flicker',
       run: async url => {
+        let previewSeq = 0
         const open = async () => {
-          host.send('load', { view: 'preview', url })
+          const href = `${url}${url.includes('?') ? '&' : '?'}trezi-load=${++previewSeq}`
+          host.send('load', { view: 'preview', url: href })
           await wait(() => page('!!document.querySelector("#shadow-phone")'))
         }
         await open()
@@ -171,8 +173,10 @@ try {
       framework: 'vite',
       urlPath: '/',
       run: async url => {
+        let previewSeq = 0
         const open = async () => {
-          host.send('load', { view: 'preview', url })
+          const href = `${url}${url.includes('?') ? '&' : '?'}trezi-load=${++previewSeq}`
+          host.send('load', { view: 'preview', url: href })
           await wait(() => page('!!document.querySelector("#shadow-phone")'))
         }
         await open()

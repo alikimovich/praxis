@@ -21,6 +21,7 @@ export type IslandOverrideMessage =
   | { op: 'apply'; key: string; from: string; css: string }
   | { op: 'settle'; key: string; css: string }
   | { op: 'clear'; key: string }
+  | { op: 'clearAll' }
 
 /** A computed box-shadow without fully transparent empty layers (Tailwind's ring slots). */
 export function shadowLayers(value: string): string {
@@ -152,12 +153,19 @@ function clear(key: string): boolean {
   return true
 }
 
+function clearAll(): boolean {
+  for (const key of [...overrides.keys()]) clear(key)
+  return true
+}
+
 const text = (value: unknown, max: number): value is string => typeof value === 'string' && value.length > 0 && value.length <= max
 
 /** One validated message from Bun; the answer goes back on the reply channel. */
 export function islandOverride(message: unknown): number | boolean | null {
   const m = message as Partial<Record<'op' | 'key' | 'from' | 'css', unknown>> | null
-  if (!m || !text(m.key, 200)) return null
+  if (!m) return null
+  if (m.op === 'clearAll') return clearAll()
+  if (!text(m.key, 200)) return null
   if (m.op === 'clear') return clear(m.key)
   if (!text(m.css, 8192) || /[<>{};]/.test(m.css)) return null
   if (m.op === 'settle') return settle(m.key, m.css)

@@ -245,7 +245,11 @@ const OVERRIDE_BOOT = String.raw`(() => {
     overrides.delete(key);
     return true;
   }
-  window.__treziIslandOverride = { apply, settle, clear, holding: () => overrides.size > 0 };
+  function clearAll() {
+    for (const key of [...overrides.keys()]) clear(key);
+    return true;
+  }
+  window.__treziIslandOverride = { apply, settle, clear, clearAll, holding: () => overrides.size > 0 };
   return true;
 })()`
 
@@ -354,8 +358,21 @@ export async function writeSourceFile(root, sourceFile, code) {
   })
 }
 
+/** Stop sampling and drop page-world override state before a fixture reload. */
+export async function clearPreviewMeasurementState(page) {
+  await page(OVERRIDE_BOOT)
+  await page(`(() => {
+    if (typeof window.__treziFlickerStop === 'function') window.__treziFlickerStop();
+    window.__shadowStep = -1;
+    window.__shadowFrames = [];
+    const o = window.__treziIslandOverride;
+    if (o?.clearAll) o.clearAll();
+  })()`)
+}
+
 /** After a live-write drag, put the preview back on the initial shadow before the override run. */
 export async function resetPreviewSource(page, root, sourceFile, format, open) {
+  await clearPreviewMeasurementState(page)
   const { code } = islandSource(initial, format)
   await writeSourceFile(root, sourceFile, code)
   await open()
