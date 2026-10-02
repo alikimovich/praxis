@@ -162,32 +162,40 @@ try {
     writeFileSync(`${artifacts}/reveal-${width}.json`, JSON.stringify(record, null, 2))
   }
 
-  // LKM-141: a turn's token counter follows its live status while it runs, then
-  // sits under Copy/Revert. The footer keeps one height, so completion moves
-  // nothing. Foreground captures at the default and the narrowest width.
+  // LKM-147 (on the LKM-145 layout): during a long tool run there is exactly one
+  // status line, its step timer ticks locally, and the running counter sits on its
+  // own line under it and grows with each snapshot. "No activity" shows only when
+  // the turn's heartbeats stopped. Once done the counter is gone and the footer
+  // keeps its height, so completion moves nothing. LKM-145: Copy/Revert stay laid
+  // out but only show on hover (or keyboard focus); the hover is the in-app
+  // override, so the real cursor position cannot leak into the captures.
+  // Foreground captures at the default and the narrowest width.
   for (const width of [440, 320]) {
-    stage = `tokens-${width}`
+    stage = `progress-${width}`
     const foreground = async (name, args = {}) => {
       const { image, ...state } = await host.request('chatAcceptance', { prepare: true, capture: true, ...args })
       writeFileSync(`${artifacts}/${name}.png`, Buffer.from(image.png, 'base64'))
       return state
     }
-    const answer = message('tokens-answer', 'assistant', 'The button radius now follows the design token. '.repeat(4))
-    answer.tokens = { label: '↑ 3.9M  ↓ 66k', detail: 'Tokens across this turn’s model calls, not current context size.' }
-    const turn = { chat: `tokens-${width}`, cards: [], questions: [], running: true, streamingId: answer.id,
+    const answer = message('progress-answer', 'assistant', 'I tightened the radius; now running the tests. '.repeat(4))
+    const counter = label => ({ label, detail: 'Tokens across this turn’s model calls, not current context size.' })
+    const tool = { kind: 'working', label: 'Running bun test', animated: true, since: Date.now() - 84000, aliveAt: Date.now(), tokens: counter('↑ 3.9M  ↓ 66k') }
+    const turn = { chat: `progress-${width}`, cards: [], questions: [], running: true, streamingId: answer.id,
       // Enough history to overflow, so the conversation is pinned to its end.
-      messages: [...Array.from({ length: 16 }, (_, i) => message(`tokens-old-${i}`, i % 2 ? 'assistant' : 'user', `Earlier message ${i}. ${'Some project history. '.repeat(10)}`)),
-        message('tokens-question', 'user', 'Tighten the button radius.'), answer],
-      activity: { kind: 'thinking', label: 'Thinking…', animated: true },
+      messages: [...Array.from({ length: 16 }, (_, i) => message(`progress-old-${i}`, i % 2 ? 'assistant' : 'user', `Earlier message ${i}. ${'Some project history. '.repeat(10)}`)),
+        message('progress-question', 'user', 'Tighten the button radius.'), answer],
+      activity: tool,
       composer: { enabled: true, text: '', thinking: true, stop: true, revision: 1 } }
-    const footer = async (running, label, settled = () => true) => {
+    const footer = async (label, ready, settled = () => true) => {
       let last
       for (let i = 0; i < 60; i++) {
         last = await host.request('chatInspect')
         const frames = last.footerFrames ?? {}
-        if (last.activity === (running ? 'Thinking…' : '') && frames[answer.id] && frames[`${answer.id}-tokens`] &&
-            last.messages.find(m => m.id === answer.id)?.tokens === answer.tokens.label) {
-          const result = { footer: rect(frames[answer.id]), tokens: rect(frames[`${answer.id}-tokens`]) }
+        if (frames[answer.id] && last.messageFrames?.[answer.id] && last.messageFrames?.['progress-question'] && ready(last, frames)) {
+          const result = { footer: rect(frames[answer.id]), statusLines: last.statusLines, activityTokens: last.activityTokens,
+            message: rect(last.messageFrames[answer.id]), question: rect(last.messageFrames['progress-question']),
+            revealed: last.revealedActions ?? [],
+            ...(frames[`${answer.id}-tokens`] ? { tokens: rect(frames[`${answer.id}-tokens`]) } : {}) }
           if (i > 2 && settled(result)) return result
         }
         await delay(50)
@@ -195,23 +203,62 @@ try {
       await capture(`failure-${stage}`)
       assert.fail(`${label}: ${JSON.stringify(last)}`)
     }
+    const same = (a, b) => ['x', 'y', 'width', 'height'].every(key => Math.abs(a[key] - b[key]) <= 0.5)
+    const runningFooter = (label, line, tokens = tool.tokens.label) => footer(label, (state, frames) =>
+      state.activity === tool.label && state.activityTokens === tokens && frames[`${answer.id}-tokens`] &&
+      state.statusLines?.length === 1 && line.test(state.statusLines[0]))
     host.send('chatState', { state: turn })
-    await foreground(`tokens-${width}-layout`, { width })
-    const running = await footer(true, `${width}pt running footer`)
-    await foreground(`tokens-running-${width}`)
-    assert(running.tokens.y + running.tokens.height <= running.footer.y + 28 + 0.5, `${width}pt: running counter is on the status line ${JSON.stringify(running)}`)
-    assert(running.tokens.x >= running.footer.x + 40, `${width}pt: running counter follows the Thinking… label ${JSON.stringify(running)}`)
+    await foreground(`progress-${width}-layout`, { width, hoverMessage: '' })
+    const running = await runningFooter(`${width}pt long tool run`, /^Running bun test · 1:[2-5]\d$/)
+    await foreground(`progress-running-${width}`)
+    assert.equal(running.statusLines.length, 1, `${width}pt: exactly one status line ${JSON.stringify(running)}`)
+    assert(running.tokens.y >= running.footer.y + 28 - 0.5, `${width}pt: running counter is on its own line under the status ${JSON.stringify(running)}`)
+    assert(Math.abs(running.tokens.x - running.footer.x) <= 1, `${width}pt: running counter is leading-aligned ${JSON.stringify(running)}`)
+    // The timer ticks from the host's own clock: no new snapshot is sent.
+    await delay(1200)
+    const ticked = await runningFooter(`${width}pt timer ticks`, /^Running bun test · 1:[2-5]\d$/, tool.tokens.label)
+    assert.notEqual(ticked.statusLines[0], running.statusLines[0], `${width}pt: the step timer ticks ${JSON.stringify({ running, ticked })}`)
+    // Streamed usage deltas arrive as snapshots with a larger counter.
+    tool.tokens = counter('↑ 3.9M  ↓ 68k')
+    host.send('chatState', { state: turn })
+    await runningFooter(`${width}pt counter grows`, /^Running bun test · 1:[2-5]\d$/, '↑ 3.9M  ↓ 68k')
+    // Heartbeats stopped three minutes ago: the hint joins the one status line.
+    tool.aliveAt = Date.now() - 185000
+    host.send('chatState', { state: turn })
+    const idle = await runningFooter(`${width}pt idle hint`, /^Running bun test · 1:[2-5]\d · No activity for 3 min$/, '↑ 3.9M  ↓ 68k')
+    await foreground(`progress-idle-${width}`)
+    tool.aliveAt = Date.now()
+    host.send('chatState', { state: turn })
+    const alive = await runningFooter(`${width}pt heartbeat clears the hint`, /^Running bun test · 1:[2-5]\d$/, '↑ 3.9M  ↓ 68k')
+    assert(Math.abs(alive.footer.height - running.footer.height) <= 0.5, `${width}pt: the idle hint does not change the footer ${JSON.stringify({ running, idle, alive })}`)
     Object.assign(turn, { running: false, activity: null, composer: { enabled: true, text: '', revision: 2 } })
-    Object.assign(answer, { workedMs: 42000, at: Date.now(), revertGroup: 'tokens-group' })
+    Object.assign(answer, { workedMs: 42000, at: Date.now(), revertGroup: 'progress-group' })
     host.send('chatState', { state: turn })
-    const done = await footer(false, `${width}pt completed footer keeps its place`,
+    const done = await footer(`${width}pt completed footer keeps its place`,
+      (state, frames) => state.activity === '' && !frames[`${answer.id}-tokens`] && state.statusLines?.length === 0 && state.activityTokens === '',
       result => Math.abs(result.footer.y + result.footer.height - (running.footer.y + running.footer.height)) <= 1)
-    await foreground(`tokens-done-${width}`)
-    assert(done.tokens.y >= done.footer.y + 28 - 0.5, `${width}pt: completed counter is under Copy/Revert ${JSON.stringify(done)}`)
-    assert(Math.abs(done.tokens.x - done.footer.x) <= 1, `${width}pt: completed counter is leading-aligned ${JSON.stringify(done)}`)
-    assert(Math.abs(done.footer.height - running.footer.height) <= 0.5, `${width}pt: footer height unchanged on completion ${JSON.stringify({ running, done })}`)
-    writeFileSync(`${artifacts}/tokens-${width}.json`, JSON.stringify({ width, running, done }, null, 2))
+    await foreground(`progress-done-${width}`)
+    assert.equal(done.tokens, undefined, `${width}pt: no counter once the turn ends`)
+    // The footer's width follows its content (status label, then the buttons); its place and height must not move.
+    const place = frame => ({ ...frame, width: 0 })
+    assert(same(place(done.footer), place(running.footer)), `${width}pt: footer position and height unchanged on completion ${JSON.stringify({ running, done })}`)
+    assert(same(done.message, running.message), `${width}pt: response frame unchanged on completion ${JSON.stringify({ running, done })}`)
+    assert(same(done.question, running.question) && Math.abs(done.message.y - running.message.y) <= 0.5,
+      `${width}pt: nothing above the counter line moves on completion ${JSON.stringify({ running, done })}`)
+    assert(!done.revealed.includes(answer.id), `${width}pt: Copy/Revert hidden without hover ${JSON.stringify(done)}`)
+    const hoverState = await host.request('chatAcceptance', { prepare: true, hoverMessage: answer.id })
+    assert.equal(hoverState.hoverOverride, answer.id)
+    const idleDone = (state, frames) => state.activity === '' && !frames[`${answer.id}-tokens`] && state.statusLines?.length === 0
+    const hovered = await footer(`${width}pt hovered message reveals Copy/Revert`, idleDone, result => result.revealed.includes(answer.id))
+    await foreground(`progress-hover-${width}`)
+    assert(same(hovered.message, done.message) && same(hovered.footer, done.footer),
+      `${width}pt: message frame identical with and without hover ${JSON.stringify({ done, hovered })}`)
+    await host.request('chatAcceptance', { prepare: true, hoverMessage: '' })
+    const unhovered = await footer(`${width}pt Copy/Revert hide again`, idleDone, result => !result.revealed.includes(answer.id))
+    assert(same(unhovered.message, done.message), `${width}pt: message frame unchanged after hover ends ${JSON.stringify({ done, unhovered })}`)
+    writeFileSync(`${artifacts}/progress-${width}.json`, JSON.stringify({ width, running, ticked, idle, alive, done, hovered, unhovered }, null, 2))
   }
+  await host.request('chatAcceptance', { prepare: true, hoverMessage: null })
 
   await checkChatAcceptance(host, artifacts)
 

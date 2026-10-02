@@ -20,7 +20,6 @@ import type {
   SlashCommandItem
 } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
-import { addUsage, emptyUsage, isEmptyUsage, readUsage, usageDelta } from '../../shared/run-stats'
 import { checkContrast, suggestAccessible } from '../apca'
 import { fluidClamp, fluidScale } from '../fluid'
 import { recordClaudeModels } from '../model-catalog'
@@ -56,6 +55,7 @@ import { letterSpacing, lineHeight } from '../type-metrics'
 import { interruptWithEscalation } from './interrupt'
 import { parseProjectMemoryEvaluation, projectMemoryEvaluationPrompt } from './memory'
 import { createRecordCapture } from './record'
+import { streamedChars, streamUsage } from './stream-usage'
 import { sanitizeTitle, transcriptDigest } from './title'
 import { describeTool, sendToRenderer, toolDetail } from './tools'
 import { providerOwner } from '../provider-owner'
@@ -1300,20 +1300,11 @@ async function startSession(
     let streamedText = false
     // The turn's login card is out; if the CLI then exits, the turn only needs its `done`.
     let authFailed = false
-    // Token accounting for the API request in flight. The SDK reports the SAME
-    // request's usage repeatedly and cumulatively — `message_start` (the input
-    // side), then each `message_delta` (the running output total), then the
-    // complete `assistant` message — so remember the running maximum already
-    // emitted and send only what's new. Reset per request, at `message_start`.
-    let sentUsage = emptyUsage()
-    const reportUsage = (raw: unknown): void => {
-      const total = readUsage(raw)
-      if (!total) return
-      const delta = usageDelta(sentUsage, total)
-      if (isEmptyUsage(delta)) return
-      sentUsage = addUsage(sentUsage, delta)
-      emit({ type: 'usage', ...delta })
-    }
+    // Token accounting for the API request in flight (`stream-usage.ts`): the
+    // SDK's cumulative reports, sent once each, plus a live output estimate from
+    // the streamed text, thinking and tool input in between (LKM-147).
+    const usage = streamUsage((delta) => emit({ type: 'usage', ...delta }))
+    const reportUsage = (raw: unknown): void => usage.report(raw)
     try {
       for await (const msg of q) {
         cliStarted()
@@ -1339,14 +1330,16 @@ async function startSession(
             break
           }
           case 'stream_event': {
-            const ev = (msg as { event?: { type?: string; message?: unknown; usage?: unknown } })
+            const ev = (msg as { event?: { type?: string; message?: unknown; usage?: unknown; delta?: Record<string, unknown> } })
               .event
             if (ev?.type === 'message_start') {
               // A new request — its counters start from zero again.
-              sentUsage = emptyUsage()
+              usage.start()
               reportUsage((ev.message as { usage?: unknown } | undefined)?.usage)
             } else if (ev?.type === 'message_delta') {
               reportUsage(ev.usage)
+            } else {
+              usage.streamed(streamedChars(ev))
             }
             const text = textDelta(msg)
             if (text) {

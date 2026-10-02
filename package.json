@@ -62,6 +62,7 @@
     "test:provider-data": "bun test/provider-data.mjs",
     "test:provider-login": "bun test/provider-login.mjs",
     "test:provider-cold-start": "bun test/provider-cold-start.mjs",
+    "test:turn-progress": "bun test/turn-progress.mjs",
     "test:provider-helper-tools": "bun test/provider-helper-tools.mjs",
     "test:service-session": "bun test/service-session.mjs",
     "test:editing-owner": "bun test/editing-owner.mjs",
