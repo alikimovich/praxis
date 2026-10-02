@@ -99,7 +99,8 @@ yourself. Preview messages are untrusted; keep the view-identity allowlist.
 - In user repos, the Swift repository owner performs every Trezi Git effect. Chats
   run in per-chat worktrees (`trezi/chat-<id>`), merged and committed to the live
   tree once per turn; the preview always serves the live checkout.
-- Exclude worktree `node_modules`/`.env` symlinks by name, never via `.gitignore`.
+- Exclude worktree `node_modules` (each worktree's own clone, never a link to the
+  live one) and the `.env` symlink by name, never via `.gitignore`.
 - "What did this session change?" compares against the merge base with the default
   branch, not `HEAD`.
 - Tool callbacks get the worktree as `root`; persist state under

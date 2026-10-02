@@ -3,7 +3,7 @@ import Darwin
 
 /// The other files Trezi keeps in a project's `.trezi/` folder (S15, moved from Bun):
 /// the pre-rename sidecar migration, the setup helpers a chat worktree carries, and the
-/// Next dependency marker. They run in the repository's lane beside the sidecar commits
+/// worktree's own dependencies and their marker. They run in the repository's lane beside the sidecar commits
 /// (`EditingSidecar`), and none of them ever follows a link out of the project: a
 /// `.trezi`/`.praxis`/`.dsgn` folder or a helper that is a link is refused.
 /// The only implementation since LKM-111 removed the Bun twins.
@@ -110,7 +110,7 @@ enum EditingProject {
         try create(Data(text.utf8), at: record, mode: 0o644)
     }
 
-    // MARK: Next dependency marker
+    // MARK: Worktree dependencies and their marker
 
     static let manifests = ["package.json", "bun.lock", "bun.lockb", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"]
 
@@ -124,20 +124,42 @@ enum EditingProject {
         return SourcePaths.hash(bytes)
     }
 
-    /// Next/Turbopack cannot follow the shared `node_modules` link outside its root:
-    /// removes that link and answers whether the checkout needs its own install (Bun runs
-    /// the install through the service, then calls `mark`). No install for a checkout whose
-    /// marker still matches, or when the live project has no dependencies to copy from.
-    static func dependencyState(liveRoot: String, checkout: String) throws -> Bool {
-        let target = checkout + "/node_modules"
-        let found = kind(target)
+    /// A worktree never shares the live `node_modules` (LKM-146): an agent's install
+    /// would write through a link into the folder the running dev server reads, before
+    /// anything lands. Removes such a link (and Next/Turbopack cannot follow one outside
+    /// its root anyway). A checkout without dependencies whose manifests match the live
+    /// ones gets an APFS copy-on-write clone of the live folder, marked at once. The
+    /// answer is whether it still needs its own install (Bun runs it through the service,
+    /// then calls `mark`): a clone that failed (another volume), or manifests that changed
+    /// since the marker. Nothing to install when the live project has no dependencies, or
+    /// when Git does not ignore the live `node_modules` (`ignored`): those stay the project's.
+    static func dependencyState(liveRoot: String, checkout: String, ignored: Bool) throws -> (install: Bool, cloned: Bool) {
+        let target = checkout + "/node_modules", live = liveRoot + "/node_modules"
+        var found = kind(target)
         if found == S_IFLNK {
             guard unlink(target) == 0 else { throw posix() }
-        } else if found != nil {
-            let marker = try? String(contentsOfFile: checkout + "/.trezi/dependencies.sha256", encoding: .utf8)
-            if marker == fingerprint(checkout) { return false }
+            found = nil
         }
-        return access(liveRoot + "/node_modules", F_OK) == 0
+        guard ignored else { return (false, false) }
+        if found != nil {
+            let marker = try? String(contentsOfFile: checkout + "/.trezi/dependencies.sha256", encoding: .utf8)
+            return (marker != fingerprint(checkout), false)
+        }
+        guard kind(live) == S_IFDIR else { return (access(live, F_OK) == 0, false) }
+        if RepositoryPaths.realpath(liveRoot) != RepositoryPaths.realpath(checkout), fingerprint(checkout) == fingerprint(liveRoot),
+           clone(live, to: target) {
+            try mark(checkout: checkout)
+            return (false, true)
+        }
+        return (true, false)
+    }
+
+    /// `clonefile(2)` of a whole folder: one call, blocks shared until either side
+    /// writes. False (and nothing left behind) when the volume cannot clone.
+    private static func clone(_ source: String, to destination: String) -> Bool {
+        if clonefile(source, destination, UInt32(CLONE_NOFOLLOW)) == 0 { return true }
+        if kind(destination) != nil { try? FileManager.default.removeItem(atPath: destination) }
+        return false
     }
 
     /// Records the fingerprint the install ran against (`.trezi` must be a plain folder).

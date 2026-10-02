@@ -4,8 +4,9 @@
  * completed turn its work auto-merges onto the LIVE tree; on mid-turn drift the turn
  * PARKS on the branch instead of clobbering the user's edit.
  *
- * Asserts: fork includes the live WIP and lands on `trezi/chat-<id>` with node_modules/
- * .env symlinked; turn-1 completeTurn merges onto the live tree and advances the base;
+ * Asserts: fork includes the live WIP and lands on `trezi/chat-<id>` with its own cloned
+ * node_modules and .env symlinked; a chat install/remove never touches the live
+ * node_modules (LKM-146); turn-1 completeTurn merges onto the live tree and advances the base;
  * turn-2's diff is INCREMENTAL (only the new file, base advanced past turn-1); syncFromLive
  * mirrors a between-turn live edit and no-ops when identical; mid-turn drift on a touched
  * file PARKS and does NOT clobber the live file; a parked second turn re-squashes into ONE
@@ -17,7 +18,17 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -28,6 +39,7 @@ import {
   stageResolve,
   syncFromLive
 } from '../src/main/chat-worktrees.ts'
+import { provisionDependencies } from '../src/main/worktree-dependencies.ts'
 
 const base = mkdtempSync(join(tmpdir(), 'trezi-cwt-'))
 const worktreesDir = join(base, 'worktrees')
@@ -73,7 +85,11 @@ try {
   ok(existsSync(wt.path), 'chat worktree checkout exists')
   ok(readFileSync(join(wt.path, 'README.md'), 'utf8').includes('WIP'), 'fork includes the live WIP')
   ok(existsSync(join(wt.path, 'Untracked.tsx')), 'fork includes the untracked live file')
-  ok(existsSync(join(wt.path, 'node_modules', '.marker')), 'node_modules symlinked into the fork')
+  ok(existsSync(join(wt.path, 'node_modules', '.marker')), 'node_modules cloned into the fork')
+  ok(
+    lstatSync(join(wt.path, 'node_modules')).isDirectory(),
+    'the fork owns its node_modules (a real folder, not a link to the live one)'
+  )
   ok(existsSync(join(wt.path, '.env')), '.env symlinked into the fork')
 
   // --- turn 1: agent creates FileA in the worktree → completeTurn merges onto live ---
@@ -128,9 +144,34 @@ try {
   // clean -fd (run by syncFromLive) must NOT remove the gitignored runtime-dep symlinks.
   ok(
     existsSync(join(wt.path, 'node_modules', '.marker')),
-    'clean -fd spared the node_modules symlink'
+    'clean -fd spared the worktree node_modules'
   )
   ok(existsSync(join(wt.path, '.env')), 'clean -fd spared the .env symlink')
+
+  // LKM-146: an install/remove in the chat never touches the live node_modules before landing.
+  const liveDeps = () => readdirSync(join(repo1, 'node_modules')).sort().join(',')
+  const liveBefore = liveDeps()
+  mkdirSync(join(wt.path, 'node_modules', 'added-dep'))
+  writeFileSync(join(wt.path, 'node_modules', 'added-dep', 'index.js'), 'export default 1\n')
+  rmSync(join(wt.path, 'node_modules', '.marker'))
+  writeFileSync(join(wt.path, 'package.json'), '{"dependencies":{"added-dep":"1.0.0"}}\n')
+  ok(liveDeps() === liveBefore, `a chat install leaves the live node_modules alone: ${liveDeps()}`)
+  ok(
+    readFileSync(join(repo1, 'node_modules', '.marker'), 'utf8') === 'dep\n',
+    'a chat remove leaves the live dependency in place'
+  )
+  const t3 = await completeTurn(repo1, wt, 'add a dependency')
+  ok(t3.outcome === 'merged' && t3.files.join() === 'package.json', `only the manifest lands: ${JSON.stringify(t3)}`)
+  ok(liveDeps() === liveBefore, 'landing moves no node_modules files (the preview installs live)')
+  wt.baseSha = t3.newBase
+  // The next turn finds manifests its marker does not cover: it reinstalls into its own folder.
+  let reinstalled = 0
+  await provisionDependencies(repo1, wt.path, async (checkout) => {
+    ok(checkout === wt.path, `the reinstall targets the worktree, never live: ${checkout}`)
+    reinstalled++
+  })
+  ok(reinstalled === 1, `changed manifests reinstall in the worktree: ${reinstalled}`)
+  ok(liveDeps() === liveBefore, 'the worktree reinstall leaves live node_modules alone')
 
   // ============================================================================
   // repo2 — mid-turn drift PARKS without clobbering · parked turn 2 re-squashes to 1 commit
@@ -209,7 +250,11 @@ try {
     'discardParked reset the tracked file to base'
   )
   ok(!existsSync(join(wt4.path, 'Junk.tsx')), 'discardParked cleaned the stray file')
-  ok(g(wt4.path, 'status', '--porcelain').trim() === '', 'discardParked left a clean worktree')
+  // `.trezi/` holds the worktree's dependency marker (Trezi metadata, never captured).
+  ok(
+    g(wt4.path, 'status', '--porcelain').trim() === '?? .trezi/',
+    `discardParked left a clean worktree: ${g(wt4.path, 'status', '--porcelain')}`
+  )
   ok(
     g(repo4, 'branch', '--list', wt4.branch).includes(wt4.branch),
     'discardParked did NOT delete the branch (the chat is still live)'
@@ -363,8 +408,8 @@ try {
     "the chat's resolved image landed on the live tree"
   )
 
-  // repo9 — a trailing-slash node_modules/ rule ignores the live directory but not
-  // the worktree symlink. Explicit filtering/clean exclusions keep it runtime-only.
+  // repo9 — a trailing-slash node_modules/ rule ignores the live directory (and the
+  // worktree's clone). Explicit filtering/clean exclusions keep it runtime-only.
   const repo9 = join(base, 'repo9')
   mkdirSync(repo9, { recursive: true })
   g(repo9, 'init', '-q', '-b', 'main')
@@ -379,7 +424,7 @@ try {
   const wt9 = await createChatWorktree(repo9, 'chatnine', worktreesDir)
   ok(
     existsSync(join(wt9.path, 'node_modules', '.marker')),
-    'trailing-slash ignored node_modules is symlinked'
+    'trailing-slash ignored node_modules is cloned'
   )
   writeFileSync(join(wt9.path, 'App.tsx'), 'v2\n')
   const t9 = await completeTurn(repo9, wt9, 'edit app')
@@ -511,9 +556,10 @@ try {
     'late preparation preserves the model’s current-turn edit'
   )
 
-  // repo15 — a directory-only node_modules/ ignore does not match the linked
-  // worktree symlink. That known runtime artifact must not look like a model edit
-  // to the dirty-before-prepare guard.
+  // repo15 — a directory-only node_modules/ ignore does not match a linked
+  // worktree symlink (a worktree from before LKM-146 keeps one until its next sync).
+  // That known runtime artifact must not look like a model edit to the
+  // dirty-before-prepare guard.
   const repo15 = join(base, 'repo15')
   mkdirSync(repo15, { recursive: true })
   g(repo15, 'init', '-q', '-b', 'main')
@@ -526,6 +572,8 @@ try {
   g(repo15, 'add', '-A')
   g(repo15, 'commit', '-q', '-m', 'init')
   const wt15 = await createChatWorktree(repo15, 'chatfifteen', worktreesDir)
+  rmSync(join(wt15.path, 'node_modules'), { recursive: true })
+  symlinkSync(join(repo15, 'node_modules'), join(wt15.path, 'node_modules'))
   writeFileSync(join(wt15.path, 'README.md'), 'chat version\n')
   writeFileSync(join(repo15, 'README.md'), 'user version\n')
   const p15 = await completeTurn(repo15, wt15, 'park with runtime symlink')

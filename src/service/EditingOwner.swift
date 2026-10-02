@@ -203,8 +203,13 @@ final class EditingOwner: @unchecked Sendable {
             }
         case "dependencyState":
             let root = try SourcePaths.root(try body.path("root")), checkout = try SourcePaths.root(try body.path("checkout"))
+            let git = repository.effects.git
             return Effect(root: root, leases: try body.strings("leases")) {
-                Self.object([("install", .bool(try EditingProject.dependencyState(liveRoot: root, checkout: checkout)))])
+                // Like the link it replaces: a node_modules Git does not ignore (exit 1) is never
+                // copied in. Outside a repository (exit 128) nothing could capture it.
+                let unignored = (try? git.run(root, ["check-ignore", "-q", "--", "node_modules"]).status) == 1
+                let state = try EditingProject.dependencyState(liveRoot: root, checkout: checkout, ignored: !unignored)
+                return Self.object([("install", .bool(state.install)), ("cloned", .bool(state.cloned))])
             }
         case "markDependencies":
             let root = try SourcePaths.root(try body.path("root")), checkout = try SourcePaths.root(try body.path("checkout"))

@@ -3,6 +3,15 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Dependency changes never break the preview (LKM-146)
+
+- [x] Reproduction findings documented (PROGRESS 2026-10-01). A chat install wrote through the `node_modules` link into the live tree; a crashed server left the preview dead.
+- [x] Worktree isolation: each worktree has its own `node_modules`, an APFS clone of the live one when the manifests match, otherwise its own install. The legacy link is removed (`EditingProject.dependencyState`, `provisionDependencies`). Rationale in `docs/WORKTREES.md`.
+- [x] Landing: stop → "Installing dependencies…" (`devserver:install`, live checkout) → start → reload preview.
+- [x] Recovery: exit reason plus health probes in the runtime owner; `preview-supervisor.ts` restarts with backoff (1/2/4/8/16 s); PreviewStatus shows the reason and Restart.
+- [x] Tests: editing-owner `dependencies`, chat-worktrees (live untouched), native-workspace-controller (landing order), preview-supervisor (new), runtime-owner `exit and health`.
+- [ ] Manager/operator: on a real Next and a real Vite project, add and remove a dependency in a chat, land it, and confirm the preview comes back by itself. Not possible in the worker sandbox (no port binding or registry).
+
 ## Stable app identity and no surprise permission prompts (LKM-137)
 
 - [x] The build signs the app, the XPC service, the helpers and the bundled Bun with one identity: `TREZI_SIGN_IDENTITY`, else Apple Development, else "Trezi Local" (created once in the login keychain). "Trezi Local" builds pin the designated requirement to identifier + certificate. Ad hoc fallback with one warning line (`scripts/signing.mjs`).

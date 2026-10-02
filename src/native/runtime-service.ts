@@ -5,7 +5,7 @@ import { stampHtml } from '../main/html-source'
 
 type Result = { kind: 'succeeded'; payload: any } | { kind: 'failed'; payload: ServiceFailure }
 interface ServiceMessage {
-  service?: string; id?: number; kind?: string; root?: string; line?: string; url?: string
+  service?: string; id?: number; kind?: string; root?: string; line?: string; url?: string; reason?: string
   path?: string; html?: string; reply?: { result: Result }
 }
 /** Bun's end of the supervised private pipe (see `NativeBridge.sendService`). */
@@ -28,7 +28,8 @@ export interface ProjectRuntime {
   install(root: string): Promise<boolean>
   stopAll(): Promise<void>
   onLog(listener: (root: string, line: string) => void): void
-  onExit(listener: (root: string, url: string) => void): void
+  /** A ready server ended without a stop or restart; `reason` says how (exit or unresponsive). */
+  onExit(listener: (root: string, url: string, reason: string) => void): void
 }
 
 /** A stamped page larger than this is served unstamped rather than risk the pipe's line limit. */
@@ -52,7 +53,7 @@ export function serviceRuntime(link: RuntimeLink, options: {
   const stamp = options.stamp ?? stampHtml
   const pending = new Map<number, { resolve: (value: Result) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>()
   const logs = new Set<(root: string, line: string) => void>()
-  const exits = new Set<(root: string, url: string) => void>()
+  const exits = new Set<(root: string, url: string, reason: string) => void>()
   let sequence = 0
 
   link.on('service-reply', message => {
@@ -67,7 +68,8 @@ export function serviceRuntime(link: RuntimeLink, options: {
     if (message.kind === 'log' && typeof message.root === 'string' && typeof message.line === 'string') {
       for (const listener of logs) listener(message.root, message.line)
     } else if (message.kind === 'exit' && typeof message.root === 'string' && typeof message.url === 'string') {
-      for (const listener of exits) listener(message.root, message.url)
+      const reason = typeof message.reason === 'string' ? message.reason : 'The dev server stopped.'
+      for (const listener of exits) listener(message.root, message.url, reason)
     } else if (message.kind === 'stamp' && typeof message.id === 'number' && typeof message.html === 'string') {
       const { id, html } = message
       void stamp(html, String(message.path ?? '')).then(

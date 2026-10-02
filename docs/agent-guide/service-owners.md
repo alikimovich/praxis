@@ -162,7 +162,8 @@ src/service/      separate Swift XPC service (S02 of docs/SWIFT-BACKEND-PLAN.md)
                   Undo); hash-bound commits of the project sidecars in .trezi/
                   (control-panels.json, and since LKM-102 annotations.json and
                   tokens.json) in the repository lane, plus the sidecar migration,
-                  setup helpers and Next dependency marker (EditingProject), and
+                  setup helpers and each worktree's own node_modules (clone)
+                  and dependency marker (EditingProject), and
                   the one-time legacy-name migration (EditingLegacyNames);
                   deferred open_preview navigation. Bun keeps the JS helpers
                   and views (main/chat-islands.ts, native/navigation-controller.ts, native/turn-boundaries.ts); Bun's

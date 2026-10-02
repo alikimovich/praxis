@@ -48,6 +48,7 @@ const UNIT = [
   "native-supervised-bridge",
   "native-preview-recovery",
   "native-workspace-controller",
+  "preview-supervisor",
   "native-support",
   "display-path",
   "native-sheets",

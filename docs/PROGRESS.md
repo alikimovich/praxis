@@ -2,6 +2,32 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-146: dependency changes never break the preview
+
+- **Reproduction findings.** These come from the code paths and fixture tests. Real Next/Vite servers with network installs could not run in this sandbox: no local port binding, no registry.
+  - **Vite and every other non-Next project.** The chat worktree's `node_modules` was a symlink to the live one. An agent's `npm install x` / `bun add x` / `pnpm remove x` in the chat wrote straight into the live `node_modules` mid-turn, under the running dev server, while the live `package.json` and lockfile were unchanged. Vite's prebundled deps went stale for a package that changed underneath. A removed package that live code still imports stops resolving before anything lands. A parked or discarded turn leaves the live dependencies changed anyway.
+  - **Next.** Next already installed into the worktree because Turbopack cannot follow the link, so the live tree was safe.
+  - **Landing (both).** Landing manifests already restarted the server, but the install ran inside `devserver:start` under "Opening X…". There was no install state and no explicit reload step.
+  - **Crashes.** A dev server that crashed or hung after it was ready left the preview dead. The runtime `exit` event only cleared the agent-evidence URL mirror, the status stayed `running`, and nothing restarted the server.
+- **Chosen isolation: every worktree gets its own `node_modules`.** Blocking installs and routing them through landing was rejected: the agent could not build or test with the dependency it just added. Detaching only when an install starts cannot be enforced either, because Trezi never sees the agent's shell commands before they run. `EditingProject.dependencyState` (Swift, repository lane) does three things:
+  - removes a legacy link;
+  - when the live folder is Git-ignored and the manifests and lockfile match, clones it with one APFS `clonefile(CLONE_NOFOLLOW)` and marks it;
+  - otherwise reports that an install is needed, which `provisionDependencies` runs in the worktree and then marks.
+
+  Measured: 0.36 s for a 12.6k-file `node_modules`, against 1.6 s for a file-by-file copy, with near-zero extra disk until either side writes. An unignored `node_modules` is never copied. The marker in the worktree's `.trezi/` is excluded by name like the rest of `.trezi/`. `createWorktree` never asks the repository owner for the link any more; the `linkNodeModules` flag stays in the protocol and is always false.
+- **Landing.** `select()` stops the server, then sets `{busy: 'Installing dependencies…'}` while the new `devserver:install` route installs in the live checkout (repository write queue). It then starts the server and reloads the preview (`preview:load`).
+- **Recovery.**
+  - The runtime owner's `exit` event now carries a `reason`: the exit code plus the output tail.
+  - A ready server is health-probed every 10 s with a 10 s timeout. Three misses stop its group, with the reason "The dev server stopped responding." Any HTTP status counts as alive.
+  - `src/native/preview-supervisor.ts` turns the exit into an error status with the reason, "Restarting in N s…" and `restart: true` (PreviewStatus shows **Restart** instead of Retry), and restarts the server after 1, 2, 4, 8 and 16 s. After that it leaves Restart to the user. A manual Restart, a landing or another project cancels the pending attempt, and a server that stayed up for 60 s starts the backoff over. The reason is also appended to Activity.
+- **Exit tails.** `ManagedProcess` read output and observed the exit on separate threads, so `onExit` sometimes ran before the last output line (the error) arrived. Once the group is gone, it now waits for the reader's EOF, up to 0.5 s, before `onExit`. This improves the pre-ready failure messages too.
+- **Tests.**
+  - `editing-owner` `dependencies`: the clone, its isolation from live, the marker, changed manifests and unignored folders.
+  - `chat-worktrees`: a chat's add or remove leaves live `node_modules` untouched until landing, and landing moves no `node_modules` file.
+  - `native-workspace-controller`: stop → install (shown) → start → load.
+  - `preview-supervisor` (new, unit): backoff, give-up, cancel and stable reset.
+  - `runtime-owner` `exit and health`: the exit reason, an unresponsive stop, and no event on stop. It uses the fixture's `RUNTIME_PROBE_FILE` so it needs no socket.
+
 ## 2026-10-01 — LKM-137 repair: `service-process` unit timeout under parallel swiftc
 
 - Manager quick verification timed out `service-process` at 120 s right after the control-codec PASS line while `service-contract`, `operation-ledger` and `preferences-owner` compiled Swift in parallel. The XPC half had not started yet; this was wall-clock contention, not a new service hang.

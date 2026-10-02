@@ -37,6 +37,12 @@ export function registerServiceDevServer(router: RpcHandlerRegistry, runtime: Pr
     if (generations.get(key) === generation) previewServers.set(key, server)
     return server
   })
+  // Landed manifest changes: the workspace controller stops the server, installs here
+  // (the preview says so), then starts it (LKM-146).
+  router.handle('devserver:install', async (_e, root: string) => {
+    bump(projectKey(root))
+    await installProjectDependencies(root)
+  })
   router.handle('devserver:stop', async (_e, root: string) => {
     const key = projectKey(root)
     bump(key)
