@@ -23,6 +23,7 @@ Every change that alters user-visible behaviour adds one line under Unreleased.
 - Renamed the app to Trezi; projects that use the earlier setup names are migrated once on open.
 - Builds sign Trezi with a stable local identity when possible so Keychain “Always Allow” and privacy grants survive rebuilds; after updating, approve the Keychain once more, then not again.
 - Connection keys and the subscription token are encrypted through `Contents/Helpers/TreziSecrets`; the master key lives in `dev.trezi.native.secrets`, migrated once from the earlier item name.
+- Chat: the token counter only shows while a turn runs, on its own line under the status; Copy/Revert under a response appear on hover or keyboard focus, without moving the layout.
 - Chat: steadier scrolling and follow behaviour, composer attachments as thumbnails, queued messages, interactive islands in the conversation and more reliable Stop and recovery.
 - Chat: per-turn token counts show inline with the working status while a turn runs and under each response’s Copy/Revert row when it finishes, instead of pinned above the composer; scroll-to-latest is a centered round control just above the composer, with transcript content faded out behind it when you have scrolled up.
 

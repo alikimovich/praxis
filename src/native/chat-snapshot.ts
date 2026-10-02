@@ -41,7 +41,7 @@ function activity(chat: Chat): NativeChatActivity | null {
   if (chat.phase === 'working') return { kind: 'working', label: chat.activityDetail.trim() || 'Working…', animated: true }
   return { kind: 'thinking', label: 'Thinking…', animated: true }
 }
-/** A turn's counter, shown after its live status and then under its Copy/Revert row. */
+/** A turn's counter, shown on its own line under the live status while the turn runs (never on finished responses). */
 export function tokens(turn: TokenUsage, total: TokenUsage) {
   const n = (v: number) => v.toLocaleString('en-US')
   return {

@@ -55,28 +55,31 @@ struct TurnFooterPositions: PreferenceKey {
     static var defaultValue: [String: CGRect] = [:]
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { _, new in new } }
 }
+/// Messages whose Copy/Revert row is currently revealed, for inspection.
+struct RevealedActions: PreferenceKey {
+    static var defaultValue: [String] = []
+    static func reduce(value: inout [String], nextValue: () -> [String]) { value += nextValue() }
+}
 
-/// The tail of an assistant response. While it runs: the live status with the
-/// turn's counter right after it. Once done: the Copy/Revert row with the
-/// counter below. Both rows keep one height, so completion moves nothing.
+/// The tail of an assistant response. While it runs: the live status, with the
+/// turn's counter on its own line below. Once done: the Copy/Revert row and no
+/// counter. The latest response keeps the counter line reserved after it
+/// completes (`reservesCount`), so completion moves nothing above it (LKM-145).
 struct ChatTurnFooter<Actions: View>: View {
     let id: String
     let activity: ChatActivityState?
     let tokens: ChatTokens?
+    let reservesCount: Bool
     let visible: Bool
     @ViewBuilder let actions: () -> Actions
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 8) {
-                if let activity {
-                    ChatActivity(activity: activity, visible: visible)
-                    if let tokens { ChatTokenCount(id: id, tokens: tokens) }
-                } else { actions() }
+            Group {
+                if let activity { ChatActivity(activity: activity, visible: visible) } else { actions() }
             }.frame(height: ChatLayout.footerRowHeight, alignment: .leading)
-            // Reserved while running, so the counter's own row never adds height.
-            if activity != nil || tokens != nil {
+            if activity != nil || reservesCount {
                 Group {
-                    if activity == nil, let tokens { ChatTokenCount(id: id, tokens: tokens) } else { Color.clear.frame(width: 1) }
+                    if activity != nil, let tokens { ChatTokenCount(id: id, tokens: tokens) } else { Color.clear.frame(width: 1) }
                 }.frame(height: ChatLayout.footerCountHeight, alignment: .leading)
             }
         }.background(GeometryReader { geometry in

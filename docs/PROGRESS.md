@@ -2,6 +2,14 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-145: Token counter only while working; Copy/Revert on hover
+
+- **Counter.** `ChatTurnFooter` (`ChatActivity.swift`) now puts the running counter on its own 14 pt line under the status, never after the tool name. Finished responses render no counter (the snapshot still carries `tokens`, so the mirror and the controller tests are unchanged). The latest response keeps the counter line reserved after completion (`reservesCount`), so the footer keeps its frame. Completion also adds the "Worked for …" caption at the top of the response, which pushed the pinned transcript up; a hidden placeholder of the same caption now holds that line while the turn runs.
+- **Copy/Revert.** Always laid out. `ChatActionButtonStyle(revealed:)` draws the glyph (and hover fill) clear until the row is hovered (`onHover` over the whole row, `contentShape`) or one of its buttons has keyboard focus (`@FocusState`). Opacity and `hidden()` were avoided so the buttons stay focusable accessibility elements; each has an explicit `accessibilityLabel` matching its tooltip. User messages have no action buttons today; the hover rule lives on the shared row.
+- **Verification hook.** `chatAcceptance` takes `hoverMessage` (id, `""` = none, `null` = real pointer) → `ChatModel.hoverOverride`, so captures do not depend on where the cursor rests. `chatInspect`/`chatAcceptance` report `revealedActions`.
+- **Proof.** The `native-chat-scroll` token stage at 440/320 pt: running counter below the 28 pt status row and leading-aligned; on completion no `-tokens` frame, footer, question and response top unchanged; Copy/Revert not revealed; with the hover override revealed, and the message and footer frames identical with and without hover. Captures `tokens-running-*`, `tokens-done-*`, `tokens-hover-*`.
+- **Limit.** The SwiftUI accessibility tree is empty without an assistive client (checked with an offscreen probe), so VoiceOver labels and Full Keyboard Access reachability are not asserted at runtime. The first native attempt was blocked by an operator Keychain prompt (`SecurityAgent` frontmost); after it cleared, `bun run test:native` passed in full (22 smokes + native-chat-scroll). The footer is compared by position and height, since its width follows its content (status label, then the buttons). The captures `tokens-running-440`, `tokens-done-440` and `tokens-hover-440` were read: counter under "Thinking…", nothing under the finished response, buttons in the reserved row on hover.
+
 ## 2026-10-01 — LKM-137 repair: `service-process` unit timeout under parallel swiftc
 
 - Manager quick verification timed out `service-process` at 120 s right after the control-codec PASS line while `service-contract`, `operation-ledger` and `preferences-owner` compiled Swift in parallel. The XPC half had not started yet; this was wall-clock contention, not a new service hang.

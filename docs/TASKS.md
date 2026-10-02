@@ -11,6 +11,12 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [x] Tests: `test/signing-identity.mjs`, `test/keychain-migration.mjs`, `test/provider-login.mjs` `helper-cwd`. Docs: README "Code signing" (one more Keychain approval, then none), `docs/PROVIDERS.md`, `docs/agent-guide/legacy-names.md`.
 - [x] Review fixes: an identity that cannot sign (locked keychain, denied key access) re-signs every piece ad hoc with the one warning instead of failing the build; a real "Trezi Local" signature in a temporary keychain proves the designated requirement is the same across two builds.
 - [ ] Manager/operator: after this build, confirm on the operator Mac that `codesign -d -r- out/native/Trezi.app` stays the same across two rebuilds, and that the Keychain asks once and then not again.
+## Token counter only while working; Copy/Revert on hover (LKM-145)
+
+- [x] Counter only while a turn runs, on its own line under the status; finished responses have none. The latest response keeps the counter line (and, while running, the "Worked for" line) reserved, so completion moves nothing above it.
+- [x] Copy/Revert always laid out, glyphs hidden until the message is hovered or a button has keyboard focus; explicit accessibility labels, still focusable.
+- [x] `native-chat-scroll` token stage: running/done/hover captures at 440/320 pt; frames unchanged on completion and with/without hover (in-app hover override).
+- [ ] Manager/operator: VoiceOver and Full Keyboard Access check of Copy/Revert on a real session (the SwiftUI accessibility tree cannot be read without an assistive client).
 ## Token counter inline; centered scroll-to-latest button (LKM-141)
 
 - [x] No pinned counter above the composer; each turn counts its own tokens on its response (chat total kept in the tooltip and mirror).

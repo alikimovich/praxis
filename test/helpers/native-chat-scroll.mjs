@@ -162,9 +162,12 @@ try {
     writeFileSync(`${artifacts}/reveal-${width}.json`, JSON.stringify(record, null, 2))
   }
 
-  // LKM-141: a turn's token counter follows its live status while it runs, then
-  // sits under Copy/Revert. The footer keeps one height, so completion moves
-  // nothing. Foreground captures at the default and the narrowest width.
+  // LKM-145 (after LKM-141): a turn's token counter sits on its own line under
+  // the live status while it runs and is gone once it completes. The latest
+  // response keeps that line reserved, so completion moves nothing above it.
+  // Copy/Revert stay laid out but only show on hover (or keyboard focus); the
+  // hover is the in-app override, so the real cursor position cannot leak into
+  // the captures. Foreground captures at the default and the narrowest width.
   for (const width of [440, 320]) {
     stage = `tokens-${width}`
     const foreground = async (name, args = {}) => {
@@ -185,9 +188,12 @@ try {
       for (let i = 0; i < 60; i++) {
         last = await host.request('chatInspect')
         const frames = last.footerFrames ?? {}
-        if (last.activity === (running ? 'Thinking…' : '') && frames[answer.id] && frames[`${answer.id}-tokens`] &&
+        if (last.activity === (running ? 'Thinking…' : '') && frames[answer.id] && !!frames[`${answer.id}-tokens`] === running &&
+            last.messageFrames?.[answer.id] && last.messageFrames?.['tokens-question'] &&
             last.messages.find(m => m.id === answer.id)?.tokens === answer.tokens.label) {
-          const result = { footer: rect(frames[answer.id]), tokens: rect(frames[`${answer.id}-tokens`]) }
+          const result = { footer: rect(frames[answer.id]), tokens: running ? rect(frames[`${answer.id}-tokens`]) : null,
+            message: rect(last.messageFrames[answer.id]), question: rect(last.messageFrames['tokens-question']),
+            revealed: last.revealedActions ?? [] }
           if (i > 2 && settled(result)) return result
         }
         await delay(50)
@@ -195,23 +201,38 @@ try {
       await capture(`failure-${stage}`)
       assert.fail(`${label}: ${JSON.stringify(last)}`)
     }
+    const same = (a, b) => ['x', 'y', 'width', 'height'].every(key => Math.abs(a[key] - b[key]) <= 0.5)
     host.send('chatState', { state: turn })
-    await foreground(`tokens-${width}-layout`, { width })
+    await foreground(`tokens-${width}-layout`, { width, hoverMessage: '' })
     const running = await footer(true, `${width}pt running footer`)
     await foreground(`tokens-running-${width}`)
-    assert(running.tokens.y + running.tokens.height <= running.footer.y + 28 + 0.5, `${width}pt: running counter is on the status line ${JSON.stringify(running)}`)
-    assert(running.tokens.x >= running.footer.x + 40, `${width}pt: running counter follows the Thinking… label ${JSON.stringify(running)}`)
+    assert(running.tokens.y >= running.footer.y + 28 - 0.5, `${width}pt: running counter is on its own line under the status ${JSON.stringify(running)}`)
+    assert(Math.abs(running.tokens.x - running.footer.x) <= 1, `${width}pt: running counter is leading-aligned, not after the Thinking… label ${JSON.stringify(running)}`)
     Object.assign(turn, { running: false, activity: null, composer: { enabled: true, text: '', revision: 2 } })
     Object.assign(answer, { workedMs: 42000, at: Date.now(), revertGroup: 'tokens-group' })
     host.send('chatState', { state: turn })
     const done = await footer(false, `${width}pt completed footer keeps its place`,
       result => Math.abs(result.footer.y + result.footer.height - (running.footer.y + running.footer.height)) <= 1)
     await foreground(`tokens-done-${width}`)
-    assert(done.tokens.y >= done.footer.y + 28 - 0.5, `${width}pt: completed counter is under Copy/Revert ${JSON.stringify(done)}`)
-    assert(Math.abs(done.tokens.x - done.footer.x) <= 1, `${width}pt: completed counter is leading-aligned ${JSON.stringify(done)}`)
-    assert(Math.abs(done.footer.height - running.footer.height) <= 0.5, `${width}pt: footer height unchanged on completion ${JSON.stringify({ running, done })}`)
-    writeFileSync(`${artifacts}/tokens-${width}.json`, JSON.stringify({ width, running, done }, null, 2))
+    // The footer's width follows its content (status label, then the buttons); its place and height must not move.
+    const place = frame => ({ ...frame, width: 0 })
+    assert(same(place(done.footer), place(running.footer)), `${width}pt: footer position and height unchanged on completion ${JSON.stringify({ running, done })}`)
+    assert(same(done.message, running.message), `${width}pt: response frame unchanged on completion ${JSON.stringify({ running, done })}`)
+    assert(same(done.question, running.question) && Math.abs(done.message.y - running.message.y) <= 0.5,
+      `${width}pt: nothing above the counter line moves on completion ${JSON.stringify({ running, done })}`)
+    assert(!done.revealed.includes(answer.id), `${width}pt: Copy/Revert hidden without hover ${JSON.stringify(done)}`)
+    const hoverState = await host.request('chatAcceptance', { prepare: true, hoverMessage: answer.id })
+    assert.equal(hoverState.hoverOverride, answer.id)
+    const hovered = await footer(false, `${width}pt hovered message reveals Copy/Revert`, result => result.revealed.includes(answer.id))
+    await foreground(`tokens-hover-${width}`)
+    assert(same(hovered.message, done.message) && same(hovered.footer, done.footer),
+      `${width}pt: message frame identical with and without hover ${JSON.stringify({ done, hovered })}`)
+    await host.request('chatAcceptance', { prepare: true, hoverMessage: '' })
+    const unhovered = await footer(false, `${width}pt Copy/Revert hide again`, result => !result.revealed.includes(answer.id))
+    assert(same(unhovered.message, done.message), `${width}pt: message frame unchanged after hover ends ${JSON.stringify({ done, unhovered })}`)
+    writeFileSync(`${artifacts}/tokens-${width}.json`, JSON.stringify({ width, running, done, hovered, unhovered }, null, 2))
   }
+  await host.request('chatAcceptance', { prepare: true, hoverMessage: null })
 
   await checkChatAcceptance(host, artifacts)
 
