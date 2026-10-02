@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Chat footer regression from LKM-145/147 (LKM-149)
+
+- [x] Counter line only on the running turn; the latest response keeps it empty once done (completion moves nothing), and older responses have one 28 pt footer row (`ChatLayout.footerHeight`).
+- [x] `ChatLatestSettle.step` never settles while the latest row is below (or not measured at) the reading edge: it relayouts in place (`.relayout`) and re-measures. A pin unresolved three times relayouts too; settled must hold on two consecutive frames; the marker nudge is reset when a settle ends.
+- [x] Tests: `native-chat-latest-settle` (`--cases`: settle/relayout/escalation decisions and 28/44 pt footer heights; offscreen samples end at the reading edge without exhausting the settle), `native-chat-scroll` progress stage (running footer 44 pt, history footers 28 pt) and chat acceptance (every capture: history footers 28 pt, latest 44 pt).
+- [ ] Manager: repeated chat-acceptance passes (the worker had 3 native calls; see PROGRESS).
+
 ## Dependency changes never break the preview (LKM-146)
 
 - [x] Reproduction findings documented (PROGRESS 2026-10-01). A chat install wrote through the `node_modules` link into the live tree; a crashed server left the preview dead.

@@ -2,6 +2,31 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-02 — LKM-149: chat footer regression from LKM-145/147
+
+- **Failure.** Candidate failed `acceptance-440-1-lines: complete latest row above composer clearance` intermittently. The same tree had passed once before. The failure capture showed AppKit at the document end (`scrollY = documentHeight − viewport`) while SwiftUI still measured the latest row 650 pt below the reading edge. Every history footer was 44 pt, because LKM-147 reserved the counter line on all responses.
+- **Footers.** `ChatLayout.footerHeight(running:latest:)` has three cases:
+  - The running turn shows the counter line.
+  - The latest response keeps that line empty once done, so completion still moves nothing (LKM-145).
+  - Older responses have one 28 pt row, as before LKM-147.
+
+  `ChatTurnFooter` takes `latest` and fixes its frame to that height.
+- **Settle.** `ChatLatestSettle.step` checked only the end marker. It now also needs the latest row to end at the reading edge. When the marker is at the edge but the row is not (or the row is unmeasured), it returns `.relayout`: the 1 pt marker change in place, then a pin, and the next frames re-measure. LKM-139 noted that a row's frame can be stale after an AppKit pin.
+  - A first attempt sent the "row below" case through the SwiftUI `.realize` scroll. The native run then exhausted the settle (80 attempts) and blanked `send-visibility` at 320 pt, because that scroll anchors the row under the composer.
+  - `.bottom` unresolved three times in a row (the pin has nothing left to move) also escalates to `.relayout`.
+  - `run` accepts settled only on two consecutive frames.
+  - The marker resets to 1 pt when a settle ends. Without the reset, the nudge parity left a 1 pt offset between the running and done captures.
+  - While the marker is nudged to 2 pt, the bottom padding gives back 1 pt. The document height and every row's place stay the same even mid-settle. Without this, a hover capture taken mid-settle read all frames 1 pt higher.
+- **Tests.**
+  - `native-chat-latest-settle --cases` pins the step, relayout and escalation decisions and the 28/44 pt footer heights. Its offscreen samples now also require the latest row at the reading edge and a settle that did not exhaust its attempts.
+  - `native-chat-scroll`: the progress stage asserts a 44 pt running footer and 28 pt history footers. Every chat acceptance capture asserts 28 pt history and 44 pt latest footers.
+- **Verification.** The worker had 3 native calls. Call 1 (chat group) failed on send-visibility, which led to the `.relayout` design. Call 2 (chat group) passed send-visibility and the 28 pt history assertion, then failed on the 1 pt nudge offset, which led to the reset. Call 3 was the full native suite.
+  - The smoke suite passed 23/23.
+  - At 440 pt, the whole chat-scroll progress stage passed, including the completion checks.
+  - At 320 pt, the hover check failed because every frame was 1 pt higher (a capture taken mid-nudge). That led to the padding compensation, which is unverified natively.
+
+  Five consecutive chat-acceptance passes were not possible within the call limit and are left to the manager.
+
 ## 2026-10-01 — LKM-148: the address bar fills the free toolbar width
 
 - **Layout.** `src/native/ToolbarAddress.swift` (`ToolbarAddressLayout`) sizes the preview address/branch block so its trailing edge sits 20 pt before the select/device group. The width comes from the window width and offsets measured after a toolbar layout: the right groups' inset from the trailing edge, the chat header offset, and the block's laid-out extra. So `NSWindow.didResizeNotification` sets the final width synchronously, in the resize's own layout pass, with no frame-late reflow and no jump on mouse-up. Measuring is skipped during a live resize, then repeated at its end, after the split resizes, and after Publish label changes. The chat header gives way (down to its 100 pt floor) before the block gets narrower than its former 180 pt. The block's absolute floor stays at the former 80 pt.

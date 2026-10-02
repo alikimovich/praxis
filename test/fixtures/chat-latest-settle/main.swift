@@ -44,18 +44,25 @@ struct Conversation: View {
         settlingLatest = true
         Task { @MainActor in
             let readingHeight = { max(1, viewportHeight - model.inset) }
-            var stuck = 0
+            var stuck = 0, unresolved = 0
             model.settleAttempts = await ChatLatestSettle.follow(request: { latestGeneration }, current: { follows }, step: {
                 ChatLatestSettle.step(latest: model.rows.last?.id, frames: model.frames, bottom: model.bottom,
                                       readingHeight: readingHeight(), viewportHeight: viewportHeight)
             }) { step in
-                if case .realize(let id) = step {
+                unresolved = step == .bottom ? unresolved + 1 : 0
+                let action = ChatLatestSettle.escalated(step, unresolved: unresolved)
+                if case .realize(let id) = action {
                     realizingLatest = true; latestNudge.toggle(); stuck += 1
                     let target = ChatLatestSettle.realizeTarget(latest: id, first: model.rows.first?.id, stuck: stuck)
                     proxy.scrollTo(target.id, anchor: target.anchor)
-                } else { stuck = 0; realizingLatest = false; pinRequest += 1 }
+                } else {
+                    stuck = 0; realizingLatest = false
+                    if action == .relayout { latestNudge.toggle() }
+                    pinRequest += 1
+                }
             }
             settlingLatest = false; realizingLatest = false
+            if latestNudge { latestNudge = false }
             if follows { pinRequest += 1 }
         }
     }
@@ -71,7 +78,7 @@ struct Conversation: View {
                         }
                         Color.clear.frame(height: latestNudge ? 2 : 1).id("bottom")
                             .background(GeometryReader { geometry in Color.clear.preference(key: Bottom.self, value: geometry.frame(in: .named("scroll")).maxY) })
-                    }.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, model.inset)
+                    }.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, model.inset - (latestNudge ? 1 : 0))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(ChatScrollStyle(follows: { follows }, pinRequest: pinRequest, attachRequest: attachRequest,
                                                     onPinnedChange: { follows = $0 }, onMovedToEnd: { if follows { settleLatest(proxy) } },
@@ -88,6 +95,37 @@ struct Conversation: View {
             }
         }
     }
+}
+
+// LKM-149: `--cases` prints the settle decision and footer heights for fixed
+// inputs (no window), so the test pins the conditions themselves.
+if CommandLine.arguments.contains("--cases") {
+    let rows = ["old": CGRect(x: 0, y: 100, width: 400, height: 154), "latest": CGRect(x: 0, y: 274, width: 400, height: 74)]
+    func step(_ frames: [String: CGRect], bottom: CGFloat) -> String {
+        switch ChatLatestSettle.step(latest: "latest", frames: frames, bottom: bottom, readingHeight: 570, viewportHeight: 776) {
+        case .settled: return "settled"
+        case .bottom: return "bottom"
+        case .relayout: return "relayout"
+        case .realize(let id): return "realize:\(id)"
+        }
+    }
+    var below = rows; below["latest"] = CGRect(x: 0, y: 1144, width: 400, height: 74)
+    var unrealized = rows; unrealized["latest"] = nil
+    let escalations = (0...6).map { unresolved -> String in
+        ChatLatestSettle.escalated(.bottom, unresolved: unresolved) == .bottom ? "bottom" : "relayout"
+    }
+    let cases: [String: Any] = [
+        "atEdge": step(rows, bottom: 369), "markerBelow": step(rows, bottom: 900),
+        // The failure on candidate: the marker read at the edge, the latest row 650 pt below it.
+        "latestBelowEdge": step(below, bottom: 560), "latestUnrealized": step(unrealized, bottom: 560),
+        "noRowInView": step(["old": CGRect(x: 0, y: 900, width: 400, height: 154)], bottom: 0),
+        "escalations": escalations,
+        "settledEscalates": ChatLatestSettle.escalated(.settled, unresolved: 3) == .settled,
+        "footer": ["history": ChatLayout.footerHeight(running: false, latest: false), "latestDone": ChatLayout.footerHeight(running: false, latest: true),
+                   "running": ChatLayout.footerHeight(running: true, latest: true), "runningNotLast": ChatLayout.footerHeight(running: true, latest: false)]
+    ]
+    print(String(data: try! JSONSerialization.data(withJSONObject: cases, options: [.sortedKeys]), encoding: .utf8)!)
+    exit(0)
 }
 
 _ = NSApplication.shared
@@ -127,6 +165,8 @@ func sample(_ phase: String) {
     let visible = model.frames.filter { $0.value.maxY > 0 && $0.value.minY < reading }.map(\.key)
     samples.append(["scenario": scenario, "phase": phase, "visibleRows": visible.count, "drawnLayers": drawnLayers, "settleAttempts": model.settleAttempts,
                     "latestVisible": model.rows.last.map { visible.contains($0.id) } ?? false,
+                    // LKM-149: settled means the latest row ends at the reading edge, not below it.
+                    "latestAboveEdge": model.rows.last.flatMap { model.frames[$0.id] }.map { $0.maxY <= reading + 1 } ?? false,
                     "offset": metrics["offset"] ?? 0, "maxOffset": metrics["maxOffset"] ?? 0])
 }
 var chats = 0

@@ -31,6 +31,7 @@ Every change that alters user-visible behaviour adds one line under Unreleased.
 
 ### Fixed
 - Chat: the transcript no longer goes blank after sending until scrolled.
+- Chat: following the conversation no longer leaves the latest message partly under the composer; past responses are compact again, without the empty counter line under Copy/Revert.
 - Check login and provider helpers no longer use your home folder as the working directory, which could make macOS ask Trezi for Photos access when Claude scanned `~/Pictures`.
 - Preview: dependency changes no longer break it. A chat's installs stay in its own worktree until they land; landing shows "Installing dependencies…" and reloads the preview. A dev server that crashes or stops responding shows why and restarts itself with backoff, with a Restart button.
 

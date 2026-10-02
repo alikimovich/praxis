@@ -72,6 +72,12 @@ export async function checkChatAcceptance(host, artifacts) {
     const state = await capture(name)
     assert.equal(state.latestVisible, true)
     if (!state.latestButton) assert.equal(state.latestClearHeight, 0, `${name}: no masked band while the button is hidden`)
+    // LKM-149: finished history responses have one 28 pt footer row; only the
+    // latest keeps the counter's (empty) line under it.
+    const footerHeights = Object.entries(state.footerFrames).map(([id, value]) => [id, String(value).match(/-?[\d.]+(?:e-?\d+)?/g).map(Number)[3]])
+    assert.ok(footerHeights.some(([id]) => id !== state.latestID), `${name}: a history footer is realized ${JSON.stringify(state.footerFrames)}`)
+    for (const [id, height] of footerHeights)
+      assert.equal(height, id === state.latestID ? 44 : 28, `${name}: footer ${id} height ${JSON.stringify(state.footerFrames)}`)
     // The tail must be present in actual pixels, not merely in a SwiftUI model.
     assert.match(state.capturedText.join(' '), /LATEST VISIBLE MESSAGE/i)
     return state
