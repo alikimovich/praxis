@@ -90,6 +90,10 @@ Both are recorded in `docs/TASKS.md`.
   restart waits for the previous group to end before it takes a port or launches.
   A stop does not interrupt a running install; Bun discards the start that was
   waiting on it. Quit stops installs too.
+- **Health (LKM-146).** A ready server is probed every 10 s (10 s timeout, since a
+  cold page compile can be slow). Three unanswered probes in a row stop its group
+  as unresponsive. Any HTTP status counts as an answer, so a 500 from a broken page
+  is not a hang. Bun's preview supervisor restarts it with backoff.
 - **Descendants.** Each server or install is the leader of its own process group.
   When the leader exits on its own, the rest of its group is stopped before the
   leader is reaped, so descendants never outlive it and the group ID cannot be
@@ -134,7 +138,9 @@ timeouts are bounded (start 150 s, install 330 s); a timeout rejects, and Bun ne
 spawns a server itself under the Swift owner.
 
 Events: `{"event":"service-event","service":"runtime","kind":"log","root","line"}`,
-`kind:"exit"` with `{root, url}` when a ready server ends on its own, and
+`kind:"exit"` with `{root, url, reason}` when a ready server ends on its own or the
+health check stopped it (`reason`: the exit code and output tail, or "The dev
+server stopped responding."), and
 `kind:"stamp"` with `{id, path, html}`, answered by Bun with
 `{"service":"runtime-helper","id":n,"html":string|null}`.
 

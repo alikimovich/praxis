@@ -1,4 +1,4 @@
-import { isNextProject, provisionNextDependencies } from './worktree-dependencies'
+import { provisionDependencies } from './worktree-dependencies'
 import { editingOwner } from './editing-owner'
 import { execFile } from 'child_process'
 import { readdir } from 'fs/promises'
@@ -17,7 +17,7 @@ import { type RemoveIntent, repositoryOwner } from './repository-owner'
  * The service's repository owner performs every Git effect (S07, `RepositoryGit.swift`
  * and `RepositoryEffects.swift`): snapshots, `worktree add`/`remove`, commits, applies
  * and prunes, each in the repository's lane. This module keeps the reads, the setup
- * helpers and Next dependencies a new worktree needs, and the path rules.
+ * helpers and dependencies a new worktree needs, and the path rules.
  */
 
 const execFileP = promisify(execFile)
@@ -60,8 +60,8 @@ export interface Worktree {
 /**
  * Create a fresh worktree forked from the main tree's CURRENT state — including the
  * interactive agent's uncommitted WIP (tracked + untracked). The service snapshots and
- * adds the worktree in the repository's lane and links node_modules / .env (skipped for
- * Next, which gets its own dependencies); setup helpers and Next dependencies stay JS.
+ * adds the worktree in the repository's lane and links .env; node_modules is the
+ * worktree's own (a copy-on-write clone or an install, `provisionDependencies`).
  */
 export async function createWorktree(
   repoRoot: string,
@@ -73,11 +73,11 @@ export async function createWorktree(
   // before its worktree exists); otherwise generate one.
   const id = opts.id ?? randomUUID().slice(0, 8)
   const branch = normalizeBranchName((opts.branchName ?? ((i) => `comment-${i}`))(id))
-  const linkNodeModules = !(await isNextProject(repoRoot))
-  const wt = await owner.createWorktree(repoRoot, worktreesDir, { id, branch, linkNodeModules })
+  // Never a link to the live node_modules: an install in the chat would change it (LKM-146).
+  const wt = await owner.createWorktree(repoRoot, worktreesDir, { id, branch, linkNodeModules: false })
   try {
     await editingOwner().syncSetupHelpers(repoRoot, wt.path)
-    await provisionNextDependencies(repoRoot, wt.path)
+    await provisionDependencies(repoRoot, wt.path)
   } catch (error) {
     await owner.removeWorktree(wt, false, 'abandon').catch(() => {})
     throw error

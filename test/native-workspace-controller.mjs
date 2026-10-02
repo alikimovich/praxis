@@ -7,7 +7,7 @@ import { workspaceService } from './helpers/workspace-fixture.mjs'
 const tick = () => new Promise(resolve => setTimeout(resolve, 0))
 const gate = () => { let resolve; const promise = new Promise(r => resolve = r); return { promise, resolve } }
 const projects = new Map(), calls = [], renders = [], active = []
-let slow, failed = false, counter = 0
+let slow, installing, serving = false, failed = false, counter = 0
 const profile = mkdtempSync(join(tmpdir(), 'trezi-workspace-controller-'))
 process.on('exit', () => rmSync(profile, { recursive: true, force: true }))
 const saved = () => readFileSync(join(profile, 'workspace.json'), 'utf8')
@@ -34,7 +34,9 @@ const services = (store) => ({
       return { name: root.slice(1), devCommand: 'bun run dev', framework: 'vite', previewKind: 'web' }
     }
     if (channel === 'git:ensure') return { branch: 'trezi/test' }
-    if (channel === 'devserver:info') return { running: false }
+    if (channel === 'devserver:info') return serving ? { running: true, server: { url: 'http://127.0.0.1:7784' } } : { running: false }
+    if (channel === 'devserver:install') await installing?.promise
+    if (channel === 'devserver:stop') serving = false
     if (channel === 'devserver:start') return { url: 'http://127.0.0.1:7784' }
     if (channel === 'sessions:list') return []
     if (channel === 'agent:new-chat' || channel === 'agent:resume-session') {
@@ -113,6 +115,33 @@ assert.equal(controller.state.activeKey, activeBeforeReorder)
 assert.deepEqual(controller.state.projects.map(project => [project.key, [...project.sessionKeys]]), sessionsBeforeReorder)
 assert.deepEqual(calls.slice(serviceCalls).filter(call => !call[0].startsWith('store')), [], 'reordering must not restart providers or previews')
 console.log('Native project reordering: both directions, persistence, invalid drops and session preservation passed')
+
+// LKM-146: landed manifest changes stop the server, install under their own label, then
+// start it and reload the preview; other landed files only restart it.
+{
+  const key = controller.state.activeKey, root = controller.active.root
+  serving = true
+  installing = gate()
+  let start = calls.length
+  const landing = controller.refreshEnvironment(key, ['package.json', 'src/App.tsx'])
+  for (let i = 0; i < 50 && !calls.slice(start).some(call => call[0] === 'devserver:install'); i++) await tick()
+  assert.deepEqual(controller.state.status, { kind: 'busy', label: 'Installing dependencies…' })
+  assert.deepEqual(renders.at(-1).status, { kind: 'busy', label: 'Installing dependencies…' }, 'the preview shows the install')
+  installing.resolve()
+  await landing
+  const order = calls.slice(start).map(call => call[0]).filter(name => /^(devserver|preview):(stop|install|start|load)$/.test(name))
+  assert.deepEqual(order, ['devserver:stop', 'devserver:install', 'devserver:start', 'preview:load'])
+  assert.ok(calls.slice(start).every(call => call[0] !== 'devserver:install' || call[1] === root), 'the install runs in the live checkout')
+  assert.ok(!('installDependencies' in calls.slice(start).find(call => call[0] === 'devserver:start')[1]))
+  assert.equal(controller.state.status.kind, 'running')
+  assert.equal(controller.active.dependenciesPending, false)
+  start = calls.length
+  serving = true
+  await controller.refreshEnvironment(key, ['vite.config.ts'])
+  assert.deepEqual(calls.slice(start).map(call => call[0]).filter(name => name.startsWith('devserver:') && name !== 'devserver:info'), ['devserver:stop', 'devserver:start'])
+  serving = false; installing = undefined
+  console.log('Native workspace LKM-146: landed manifests stop, install (shown), restart and reload; config changes only restart passed')
+}
 
 // --- S04: the store owns identity/order/selection; each is persisted first ------
 // Metadata reaches the owner over its pipe: wait until the stored file stops changing.

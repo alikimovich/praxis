@@ -32,6 +32,7 @@ Every change that alters user-visible behaviour adds one line under Unreleased.
 ### Fixed
 - Chat: the transcript no longer goes blank after sending until scrolled.
 - Check login and provider helpers no longer use your home folder as the working directory, which could make macOS ask Trezi for Photos access when Claude scanned `~/Pictures`.
+- Preview: dependency changes no longer break it. A chat's installs stay in its own worktree until they land; landing shows "Installing dependencies…" and reloads the preview. A dev server that crashes or stops responding shows why and restarts itself with backoff, with a Restart button.
 
 ### Removed
 - The Electron app, the React renderer, browser and Tailscale modes, and the old in-page content controls.

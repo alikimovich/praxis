@@ -28,11 +28,14 @@ Moved from the old `CLAUDE.md` ("Gotchas", "Conventions") and `AGENTS.md`
   the live tree as today (`isRepoRoot` gate in git.ts). Resumed sessions get a
   fresh worktree; the model picker (agent:restart-chat) reuses the existing one.
   Drift from concurrent live edits syncs at turn start; conflicts park on the
-  branch for review. One worktree per open chat costs disk (~node_modules are
-  symlinked); worktree directories live under `<userData>/trezi/worktrees`.
-- **A worktree's symlinked node_modules/.env must be excluded by NAME, never via
-  the target's `.gitignore`.** They're symlinked into every worktree so it can
-  build, but a `.gitignore` pattern with a trailing slash (`node_modules/`, the
+  branch for review. One worktree per open chat costs little disk: its
+  node_modules is an APFS copy-on-write clone of the live one, never a symlink,
+  so a chat's install cannot touch the live dependencies (LKM-146,
+  `docs/WORKTREES.md`); worktree directories live under `<userData>/trezi/worktrees`.
+- **A worktree's node_modules and symlinked .env must be excluded by NAME, never via
+  the target's `.gitignore`.** Every worktree has them so it can build (node_modules
+  as its own folder since LKM-146; older worktrees had a symlink, which is removed at
+  the next sync). A `.gitignore` pattern with a trailing slash (`node_modules/`, the
   Next.js/CRA/Vite default) is *directory-only* and git never treats a symlink as
   a directory — so it fails to match the symlink. Left to `.gitignore`, the
   symlink is staged by `git add -A`, the turn-end auto-merge chokes reading it

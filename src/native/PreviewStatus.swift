@@ -7,6 +7,8 @@ final class PreviewStatusModel: ObservableObject {
     @Published var detail = ""
     @Published var project = ""
     @Published var command = ""
+    /// A running server ended (crash or unresponsive): the main button says Restart.
+    @Published var restart = false
     let cat = CatAnimator()
     func action(_ name: String) { emit(["event":"native-preview-action", "action":name, "project":project, "command":command]) }
 }
@@ -21,7 +23,7 @@ struct PreviewStatusContent: View {
                 if model.kind == "setup" || model.kind == "error" {
                     TextField("Dev command (optional)", text: $model.command).textFieldStyle(.roundedBorder).frame(maxWidth: 360)
                     HStack {
-                        Button(model.command.isEmpty ? "Retry" : "Run") { model.action("run") }
+                        Button(!model.command.isEmpty ? "Run" : model.restart ? "Restart" : "Retry") { model.action("run") }
                         if model.kind == "error" { Button("Diagnose…") { model.action("diagnose") }; Button("Activity") { model.action("logs") } }
                     }
                     if model.kind == "error" {
@@ -45,6 +47,7 @@ final class NativePreviewStatus: NSHostingView<PreviewStatusContent> {
         model.project = project; model.kind = kind
         model.message = kind == "setup" ? "Plan your project in chat, or enter a command to start its preview." : status["message"] as? String ?? status["label"] as? String ?? ""
         model.detail = status["detail"] as? String ?? ""
+        model.restart = kind == "error" && status["restart"] as? Bool == true
         isHidden = project.isEmpty || !["busy", "setup", "error"].contains(kind)
         model.cat.update(running: kind == "busy", questioning: false); model.cat.show(!isHidden)
     }

@@ -3,6 +3,15 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Dependency changes never break the preview (LKM-146)
+
+- [x] Reproduction findings documented (PROGRESS 2026-10-01). A chat install wrote through the `node_modules` link into the live tree; a crashed server left the preview dead.
+- [x] Worktree isolation: each worktree has its own `node_modules`, an APFS clone of the live one when the manifests match, otherwise its own install. The legacy link is removed (`EditingProject.dependencyState`, `provisionDependencies`). Rationale in `docs/WORKTREES.md`.
+- [x] Landing: stop → "Installing dependencies…" (`devserver:install`, live checkout) → start → reload preview.
+- [x] Recovery: exit reason plus health probes in the runtime owner; `preview-supervisor.ts` restarts with backoff (1/2/4/8/16 s); PreviewStatus shows the reason and Restart.
+- [x] Tests: editing-owner `dependencies`, chat-worktrees (live untouched), native-workspace-controller (landing order), preview-supervisor (new), runtime-owner `exit and health`.
+- [ ] Manager/operator: on a real Next and a real Vite project, add and remove a dependency in a chat, land it, and confirm the preview comes back by itself. Not possible in the worker sandbox (no port binding or registry).
+
 ## Live turn progress: timer, current step, streaming tokens (LKM-147)
 
 - [x] One status line: the current step and its elapsed time ("Running bun test · 1:24", "Thinking · 0:45"), ticked by a local one-second clock (`ChatActivityClock.swift`). The owner's "Still thinking…" is a `progress` step, not a transcript row.
