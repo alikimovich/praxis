@@ -2,6 +2,46 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-140 (reopened): override lifecycle under Next HMR, real-fixture numbers
+
+- **Cause of the reopened failures (diagnosis run 09df9ede).** Two defects shared the HMR/override lifecycle.
+  - (A) `settle()` in `src/preview/island-override.ts` (and the hand-kept copy in the test harness) treated an empty target list as settled. Next HMR can remount `#shadow-phone`, which disconnects every target, so the override was dropped while the new node still showed an older value. That produced `next-after` `outOfOrder: 1` and `waitForGestureSettled` timeouts in earlier runs.
+  - (B) `resetPreviewSource` reloaded the preview right after writing the initial source back. The dev server could still serve the last drag value, and React hydration does not patch a mismatched server style attribute (Next forwards "This won't be patched up" from the preview). The card then never matched, and the run failed with "Preview shadow did not match the island source" after `next-before`.
+- **Fix (A).** `settle()` now:
+  - re-resolves the bound elements: the connected targets, plus the elements that show the gesture's start value or the written value;
+  - returns false for an empty list (the backend's 8 s timeout still drops the override);
+  - holds remounted elements before reading anything;
+  - removes the override only when both the shown and the own value equal `computed(css)`.
+- **Mid-gesture HMR is covered too.** While an override is held, a `MutationObserver` (style attribute and child list, under body) re-holds a target whose inline style React rewrote, and any remounted node. This runs at the microtask checkpoint, before paint.
+- **Fix (B).** The harness:
+  - injects the production module, transpiled with `Bun.Transpiler`, instead of a copy;
+  - waits until the dev server serves the expected literal (the Next page HTML; Vite `/src/phone.js`);
+  - loads with a cache-busting query and waits for the new document;
+  - reloads until the card computes to the source value;
+  - names observed vs expected in every timeout error.
+- **Other harness fixes.**
+  - Rewriting identical text in setup is skipped, so it cannot start a spurious HMR update mid-drag.
+  - `hmrStyleSwaps` counts every computed-shadow change over the run. Before, re-attaching the sampler after each live-write step reset it.
+- **Numbers.** These come from `test/island-flicker-frameworks.mjs`, 12-step Light pad drag, system WebKit, worker quick verification run `run-ExycIO`:
+  - `next-before` (Next 16.3.5 Webpack, LKM-133 live writes): 12 source writes, 8 computed-shadow changes, 0 gaps, 0 out-of-order, 53 foreign frames. HMR lags the 40 ms drag steps, so the card shows values 2+ steps old, and it never catches up within a step.
+  - `next-after` (override): 1 write, 11 changes (one per frame shown), 0 gaps, 0 out-of-order, 0 foreign.
+  - `vite-before`: 12 writes, 0 gaps, 0 out-of-order, 5 foreign. Each write is a full reload (no HMR boundary), which also kills the sampler, so only spot samples count.
+  - `vite-after`: 1 write, 0 gaps, 0 out-of-order, 0 foreign.
+  - The reset served the stale page on the first fetch and the reverted one on the second, then matched on the first load.
+  - Unit model (`test/island-flicker.mjs`): unchanged (H3 refuted on 1681 points; before 12 HMR / 12 gaps; after 1 write, 0 gaps).
+- **Tests.**
+  - `test/island-override.mjs` (new, unit) runs the production module on a small fake DOM. It covers:
+    - start-value hold;
+    - a stale write never settling;
+    - a remount held before paint;
+    - disconnected and empty targets never settled;
+    - Fast Refresh rewrite held until settle;
+    - a CSS-module gap frame staying covered;
+    - removal only on the final value;
+    - clear restoring the page value.
+  - It fails on the previous `settle()`.
+- **Captured frames.** These are unchanged from the native `shadow-light` group: `shadow-light-drag.png`, `shadow-light-released.png` and `shadow-light-drag.json`.
+
 ## 2026-10-01 — LKM-140: Shadow Light drags without flicker
 
 - **Measured, hypothesis by hypothesis.** `test/island-flicker.mjs` (unit) records these numbers. It uses the real `ChatIslands` and the Swift owners, with a modelled page ticking every 16 ms.

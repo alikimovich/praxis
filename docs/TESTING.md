@@ -191,6 +191,8 @@ not change before the release. It writes `shadow-light-drag.png` (mid-drag),
 test `test/island-flicker.mjs` models a gap HMR to record the same counts before
 and after the fix. With TreziHost built, `test/island-flicker-frameworks.mjs` runs
 the same drag on real Next.js Webpack HMR and a Vite/CSS module fixture.
+`test/island-override.mjs` runs the preview override module on a fake DOM. It checks
+that the override survives HMR remounts and that it is removed only on the final value.
 
 Read screenshots in `test/artifacts/native/` for UI verification. Offscreen
 AppKit captures do not faithfully paint Liquid Glass; visible inspection may be

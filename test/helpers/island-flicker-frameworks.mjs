@@ -89,6 +89,36 @@ async function withHost(run) {
   }
 }
 
+/** Cache-busted preview loads; each waits until the new document (not the old one) has the card. */
+function opener(host, page, wait, url) {
+  let seq = 0
+  return async () => {
+    const href = `${url}${url.includes('?') ? '&' : '?'}trezi-load=${++seq}`
+    host.send('load', { view: 'preview', url: href })
+    await wait(() => page(`location.href === ${JSON.stringify(href)} && !!document.querySelector("#shadow-phone")`), href)
+  }
+}
+
+/** True once `url` (the page or the island module) carries `css`; else what it serves instead. */
+function servedAt(url) {
+  return async css => {
+    const text = await (await fetch(url, { cache: 'no-store' })).text()
+    if (text.includes(css)) return true
+    const at = text.indexOf('rgba(0, 0, 0, 0.35)')
+    return at < 0 ? `no shadow literal in ${url}` : text.slice(Math.max(0, at - 30), at + 110)
+  }
+}
+
+/** The LKM-133 live-write drag, a reset to the initial source, then the override drag. */
+async function measureBoth({ host, page, wait, url, served, label, root, sourceFile, component, format }) {
+  const open = opener(host, page, wait, url)
+  await open()
+  const run = withOverrides => measureFramework({ label, page, waitForCard: open, served, root, sourceFile, component, withOverrides })
+  await run(false)
+  await resetPreviewSource(page, root, sourceFile, format, open, served)
+  await run(true)
+}
+
 async function prepareNext(root) {
   await cp(resolve('test/fixtures/next-app'), root, {
     recursive: true,
@@ -131,40 +161,8 @@ try {
       command: 'bun run dev --webpack',
       framework: 'next',
       urlPath: '/shadow-flicker',
-      run: async url => {
-        let previewSeq = 0
-        const open = async () => {
-          const href = `${url}${url.includes('?') ? '&' : '?'}trezi-load=${++previewSeq}`
-          host.send('load', { view: 'preview', url: href })
-          await wait(() => page('!!document.querySelector("#shadow-phone")'))
-        }
-        await open()
-        await measureFramework({
-          label: 'next',
-          page,
-          waitForCard: open,
-          root: nextRoot,
-          sourceFile: 'app/shadow-flicker/ShadowPhone.tsx',
-          component: 'ShadowPhone',
-          withOverrides: false
-        })
-        await resetPreviewSource(
-          page,
-          nextRoot,
-          'app/shadow-flicker/ShadowPhone.tsx',
-          'tsx',
-          open
-        )
-        await measureFramework({
-          label: 'next',
-          page,
-          waitForCard: open,
-          root: nextRoot,
-          sourceFile: 'app/shadow-flicker/ShadowPhone.tsx',
-          component: 'ShadowPhone',
-          withOverrides: true
-        })
-      }
+      run: url => measureBoth({ host, page, wait, url, served: servedAt(url), label: 'next', root: nextRoot,
+        sourceFile: 'app/shadow-flicker/ShadowPhone.tsx', component: 'ShadowPhone', format: 'tsx' })
     })
 
     await withServer({
@@ -172,34 +170,8 @@ try {
       command: 'bun run dev',
       framework: 'vite',
       urlPath: '/',
-      run: async url => {
-        let previewSeq = 0
-        const open = async () => {
-          const href = `${url}${url.includes('?') ? '&' : '?'}trezi-load=${++previewSeq}`
-          host.send('load', { view: 'preview', url: href })
-          await wait(() => page('!!document.querySelector("#shadow-phone")'))
-        }
-        await open()
-        await measureFramework({
-          label: 'vite',
-          page,
-          waitForCard: open,
-          root: viteRoot,
-          sourceFile: 'src/phone.js',
-          component: 'Shadow',
-          withOverrides: false
-        })
-        await resetPreviewSource(page, viteRoot, 'src/phone.js', 'js', open)
-        await measureFramework({
-          label: 'vite',
-          page,
-          waitForCard: open,
-          root: viteRoot,
-          sourceFile: 'src/phone.js',
-          component: 'Shadow',
-          withOverrides: true
-        })
-      }
+      run: url => measureBoth({ host, page, wait, url, served: servedAt(new URL('/src/phone.js', url).href),
+        label: 'vite', root: viteRoot, sourceFile: 'src/phone.js', component: 'Shadow', format: 'js' })
     })
   })
 

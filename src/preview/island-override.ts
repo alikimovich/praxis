@@ -10,11 +10,15 @@
  * computes to the written value: the HMR update with the final value has applied. The check
  * and the removal run in one task, so no frame is painted in between and a CSS swap that
  * drops the old rule before the new one applies never shows.
+ *
+ * Next's HMR can remount the bound element, which disconnects the targets. That is never
+ * "settled": the new elements (showing the start or the written value) are found again and
+ * held until their own style shows the written value.
  */
 const PROP = 'box-shadow'
 const MAX_TARGETS = 64
 interface Target { el: HTMLElement; original: string; priority: string; shown: string | null }
-interface Override { targets: Target[]; css: string }
+interface Override { targets: Target[]; css: string; from: string }
 const overrides = new Map<string, Override>()
 
 export type IslandOverrideMessage =
@@ -47,19 +51,26 @@ function computed(css: string): string {
   return shadowLayers(value)
 }
 
-/** The elements that show `from` now: the island's bound elements. */
-function discover(from: string): Target[] {
-  const expected = computed(from)
-  if (!expected || expected === 'none' || !document.body) return []
+/** The elements (other than `held`) that show one of `values` now: the island's bound elements. */
+function discover(values: string[], held = new Set<Element>()): Target[] {
+  const wanted = new Set(values.map(computed).filter(value => value && value !== 'none'))
+  if (!wanted.size || !document.body) return []
   const found: Target[] = []
   for (const el of [document.body, ...document.body.querySelectorAll('*')]) {
-    if (!(el instanceof HTMLElement)) continue
-    const shown = shadowLayers(getComputedStyle(el).boxShadow)
-    if (shown !== expected) continue
+    if (!(el instanceof HTMLElement) || held.has(el)) continue
+    if (!wanted.has(shadowLayers(getComputedStyle(el).boxShadow))) continue
     found.push({ el, original: el.style.getPropertyValue(PROP), priority: el.style.getPropertyPriority(PROP), shown: null })
     if (found.length >= MAX_TARGETS) break
   }
   return found
+}
+
+/** The held targets still in the page, plus the elements an HMR remount put in place of the others. */
+function resolve(override: Override): Target[] {
+  const connected = override.targets.filter(t => t.el.isConnected)
+  if (connected.length && connected.length === override.targets.length) return connected
+  const held = new Set<Element>(connected.map(t => t.el))
+  return [...connected, ...discover([override.from, override.css], held)].slice(0, MAX_TARGETS)
 }
 
 /** The page (a React render, HMR) may rewrite the inline value we took over. */
@@ -96,12 +107,14 @@ function restore(target: Target) {
 
 function apply(key: string, from: string, css: string): number {
   let override = overrides.get(key)
-  if (override) override.targets = override.targets.filter(t => t.el.isConnected)
-  // HMR may have replaced every node; the new ones show the source value again.
+  if (override) {
+    override.from = from
+    override.targets = resolve(override)
+  }
   if (!override?.targets.length) {
-    const targets = discover(from)
+    const targets = discover([from])
     if (!targets.length) { overrides.delete(key); return 0 }
-    override = { targets, css }
+    override = { targets, css, from }
     overrides.set(key, override)
   }
   override.css = css
@@ -109,38 +122,29 @@ function apply(key: string, from: string, css: string): number {
   return override.targets.length
 }
 
-/** True when some connected element already shows `css` without an override. */
-function pageShows(css: string): boolean {
-  const expected = computed(css)
-  if (!expected || expected === 'none' || !document.body) return false
-  for (const el of [document.body, ...document.body.querySelectorAll('*')]) {
-    if (!(el instanceof HTMLElement)) continue
-    if (settledShadow(el) === expected) return true
-  }
-  return false
-}
-
-/** Remove the override once the page's own style shows `css`; true when nothing is held. */
+/**
+ * Remove the override once the page's own style shows `css`; true when nothing is held.
+ * Both the shown and the own value must compute to `css`: an element that is gone or still
+ * on the old rule keeps the override, and an empty page is never settled (the backend's
+ * timeout drops the override if the bound elements never come back).
+ */
 function settle(key: string, css: string): boolean {
   const override = overrides.get(key)
   if (!override) return true
   if (override.css !== css) return false
   const expected = computed(css)
   if (!expected || expected === 'none') return false
-  override.targets = override.targets.filter(t => t.el.isConnected)
-  if (!override.targets.length) {
-    if (!pageShows(css)) return false
-    overrides.delete(key)
-    return true
-  }
+  override.targets = resolve(override)
+  if (!override.targets.length) return false
+  // A remounted element is held before anything is read, so it never paints the old value.
+  for (const target of override.targets) if (!owned(target)) show(target, css)
   for (const target of override.targets) {
-    if (!owned(target)) show(target, css)
-    const withOverride = settledShadow(target.el)
+    const shown = settledShadow(target.el)
     restore(target)
     const own = settledShadow(target.el)
     show(target, css)
     settledShadow(target.el)
-    if (withOverride !== expected || own !== expected) return false
+    if (shown !== expected || own !== expected) return false
   }
   for (const target of override.targets) restore(target)
   overrides.delete(key)
@@ -158,10 +162,35 @@ function clearAll(): boolean {
   return true
 }
 
+let observer: MutationObserver | null = null
+
+/**
+ * While an override is held, an HMR re-render that rewrites a target's inline style, or a
+ * remount that replaces it, is taken over again in the same microtask checkpoint, before the
+ * page paints the old value. Only `settle` lets the page's own value show.
+ */
+function watch() {
+  if (!overrides.size || !document.body) { observer?.disconnect(); observer = null; return }
+  if (observer || typeof MutationObserver === 'undefined') return
+  observer = new MutationObserver(() => {
+    for (const override of overrides.values()) {
+      override.targets = resolve(override)
+      for (const target of override.targets) if (!owned(target)) show(target, override.css)
+    }
+  })
+  observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] })
+}
+
 const text = (value: unknown, max: number): value is string => typeof value === 'string' && value.length > 0 && value.length <= max
 
 /** One validated message from Bun; the answer goes back on the reply channel. */
 export function islandOverride(message: unknown): number | boolean | null {
+  const value = handle(message)
+  watch()
+  return value
+}
+
+function handle(message: unknown): number | boolean | null {
   const m = message as Partial<Record<'op' | 'key' | 'from' | 'css', unknown>> | null
   if (!m) return null
   if (m.op === 'clearAll') return clearAll()

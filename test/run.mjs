@@ -64,6 +64,7 @@ const UNIT = [
   "no-system-preferences",
   "chat-islands",
   "island-flicker",
+  "island-override",
   "island-flicker-frameworks",
   "native-context",
   "native-updates",
