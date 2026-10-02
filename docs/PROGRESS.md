@@ -28,6 +28,11 @@ Newest first. Append a dated entry when you finish a chunk of work.
   - `vite-before`: 12 writes, 0 gaps, 0 out-of-order, 5 foreign. Each write is a full reload (no HMR boundary), which also kills the sampler, so only spot samples count.
   - `vite-after`: 1 write, 0 gaps, 0 out-of-order, 0 foreign.
   - The reset served the stale page on the first fetch and the reverted one on the second, then matched on the first load.
+  - Repeated on 4 unit runs, including after the LKM-149 merge (`run-ExycIO`, `run-ZpPZGh`, `run-cHneHz`, `run-tvxx0d`):
+    - `next-after` and `vite-after` were 1 write, 0 gaps, 0 out of order and 0 foreign every time.
+    - `next-before` showed 23–53 foreign frames and 5–10 shadow changes.
+    - `vite-before` showed 4–5 foreign spot samples.
+  - Full `bun run test:native` passed on the merged tree (23/23 smoke checks plus chat acceptance).
   - Unit model (`test/island-flicker.mjs`): unchanged (H3 refuted on 1681 points; before 12 HMR / 12 gaps; after 1 write, 0 gaps).
 - **Tests.**
   - `test/island-override.mjs` (new, unit) runs the production module on a small fake DOM. It covers:
