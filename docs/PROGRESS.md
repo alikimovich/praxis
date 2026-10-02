@@ -2,6 +2,10 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-02 — LKM-144 resumed on the LKM-149 candidate
+
+- The `acceptance-440-1-lines` regression below was fixed in LKM-149 (merged as `ee301e2`), not in LKM-144; the entry below is history. LKM-144 carries no layout change. Its scope is unchanged: keychain serialization and tests, the one-time network-volume note, docs.
+
 ## 2026-10-01 — LKM-144 repair: `acceptance-440-1-lines` fails on the merged LKM-145/147 layout (open)
 
 - **Failure.** `test/native-chat-scroll.mjs` stops at `acceptance-440-1-lines: complete latest row above composer clearance`, deterministically (three native runs: manager, and two here). The 40-history fixture sits pinned (`pinned` true, `scrollY` ≈ `documentHeight − viewportHeight`), but the latest row's frame is at y ≈ 1144 against a 776 pt viewport, and rows realized after it have irregular gaps (60 and 20 pt extra between rows 38/39/latest). The pin reports 379 pins. The same test passed on `a542012`, before the LKM-145/147 merge.
