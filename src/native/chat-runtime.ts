@@ -6,7 +6,7 @@ import { views } from './platform'
 import { chatAgentSettingsFromOptions } from '../shared/chat-settings'
 import type { AgentEvent } from '../shared/api'
 import type { NativeBridge } from './bridge'
-import { NativeChatController } from './chat-controller'
+import { NativeChatController, type ChatServices } from './chat-controller'
 import { dispatchIPC, serviceEvents, type NativeView } from './platform'
 
 export let nativeIslands: ChatIslands
@@ -14,7 +14,7 @@ const boundaries = new TurnBoundaries()
 /** Turn boundaries per chat (begin, landed, failed), for deferred preview navigation. */
 export const turnBoundaries = new Set<(key: string, kind: 'begin' | 'landed' | 'failed', turn: string | null) => void>()
 export let nativeChat: NativeChatController
-export function installNativeChat(host: NativeBridge, view: NativeView) {
+export function installNativeChat(host: NativeBridge, view: NativeView, notice?: ChatServices['notice']) {
   const islands = new ChatIslands(key => {
     const chat = nativeChat.chats.get(key)
     if (chat) nativeChat.changed(chat)
@@ -39,7 +39,8 @@ export function installNativeChat(host: NativeBridge, view: NativeView) {
     render: state => host.send('chatState', { state: renderIslands(state) }),
     effect: effect => {
       if (effect.type === 'focus') host.send('composerFocus')
-    }
+    },
+    notice
   })
   host.on('island-action', command => {
     if (command.chat !== nativeChat.active || !nativeChat.chats.has(command.chat)) return

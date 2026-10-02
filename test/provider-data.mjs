@@ -145,6 +145,27 @@ try {
     for (const started of [f, g, h]) { await started.stop(); fixtures.delete(started) }
   })
 
+  // LKM-144: Keychain helper calls run one at a time, so parallel reads show one macOS
+  // prompt (the first approval serves the rest), never one each.
+  await section('keychain-serial', async () => {
+    const home = profile('serial')
+    const busy = join(scratch, 'crypto-busy'), overlaps = join(scratch, 'crypto-overlaps')
+    const slow = script(join(scratch, 'slow-crypto.mjs'), `
+import { appendFileSync, mkdirSync, rmdirSync } from 'node:fs'
+try { mkdirSync(${JSON.stringify(busy)}) } catch { appendFileSync(${JSON.stringify(overlaps)}, 'x') }
+await new Promise(resolve => setTimeout(resolve, 250))
+try { rmdirSync(${JSON.stringify(busy)}) } catch {}
+await import(${JSON.stringify(CRYPTO)})`)
+    const f = await fixture(home, { PROVIDER_CRYPTO: `${process.execPath}\u001f${slow}` })
+    const data = f.owner().data
+    await data.save({ id: 'one', label: 'One', baseUrl: 'https://one.example', apiKey: 'sk-one' })
+    await data.save({ id: 'two', label: 'Two', baseUrl: 'https://two.example', apiKey: 'sk-two' })
+    const read = await Promise.all(['one', 'two', 'one', 'two'].map(id => data.secretFor(id)))
+    assert.deepEqual(read, ['sk-one', 'sk-two', 'sk-one', 'sk-two'])
+    assert.ok(!existsSync(overlaps), 'no two Keychain helper calls ran at once')
+    await f.stop(); fixtures.delete(f)
+  })
+
   await section('catalog', async () => {
     const home = profile('catalog-swift')
     writeFileSync(join(home, 'trezi/model-catalog.json'), golden.catalogSeed)

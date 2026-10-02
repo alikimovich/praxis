@@ -685,6 +685,114 @@ profile, an invalid old key); `test/provider-login.mjs` `helper-cwd` (Check logi
 home, `/`, an ancestor of a home or a missing folder never runs in it). The keychain
 parts need a session that can create a keychain and say SKIP elsewhere.
 
+## Keychain and network-volume prompts after stable signing (LKM-144)
+
+**Rebuild loop (`test/keychain-rebuild.mjs`, `bun run test:keychain-rebuild`).** This
+checks whether an **Always Allow** for `TreziSecrets` survives a rebuild when the signer
+is self-signed and has no Team ID:
+
+- *deterministic* (runs everywhere): two builds of `src/native/Secrets.swift` from
+  different folders, with the build's own swiftc flags, are byte-identical, and the
+  signed helpers have the same CDHash. On the worker Mac (Xcode 26 SDK, arm64) that was
+  `7afd5eab581e61ab99e6cb659ad31c8dd4120032` ad hoc.
+- *rebuild-read*: on a temporary keychain made with a password, the item one build
+  creates is read by the rebuild (another folder) twice with UI disabled. A build from
+  changed source is refused (exit 1, where a real run would ask). This is the loop
+  build → read → rebuild → read, with no prompt possible.
+
+The test uses only no-UI calls: `TreziSecrets --keychain`, and `security`
+create/unlock/delete-keychain with a password. It never touches the login keychain, the
+search list or the default keychain. It does not sign with "Trezi Local", because
+codesign finds an identity only through the search list. Where no keychain can be created
+(the worker sandbox refuses `create-keychain`) that part prints SKIP. Every `security` call
+is bounded at 30 s, so a hung security agent cannot stall the suite.
+
+A manual probe on a temporary keychain (LKM-144) found two access lists:
+
+- for an item `TreziSecrets` creates when signed with "Trezi Local", the decrypt entry
+  trusts the designated requirement (`identifier "dev.trezi.secrets" and certificate
+  leaf = H"…"`), so rebuilt and even changed builds read it;
+- signed ad hoc, the entry names `cdhash H"…"`. That is the per-rebuild prompt before
+  LKM-137.
+
+A temporary keychain shows no partition list. The login keychain is where LKM-137 saw a
+`cdhash:` partition, so the operator steps below confirm the real result there. The
+helper's bytes, and so its CDHash, do not change between builds, so that partition still
+matches after a rebuild. Only a change to `Secrets.swift`, the Swift compiler or the SDK
+costs one more approval.
+
+**Repeated prompts while migrating.** The service ran `TreziSecrets` on a concurrent
+queue with a 30 s timeout. A first read of the old item (owned by the old ad hoc
+TreziHost) asks for the login password. Each parallel call (several connections, the
+seat token) showed its own dialog, and a helper killed while the user was still typing
+threw the answer away. `ProviderData.crypto` now runs the helper one call at a time with
+a 180 s timeout, so one approval serves the calls queued behind it (`test/provider-data.mjs`
+`keychain-serial`). `Secrets.swift` is unchanged, so this costs no extra approval.
+
+**Migration from `dev.praxis.native.secrets`.** It is idempotent: once
+`dev.trezi.native.secrets` exists the old item is never read again. A helper whose write
+collides with another's uses the key the other wrote. `test/keychain-migration.mjs`
+covers migrate, repeated runs, a reappearing old item, a fresh profile and an invalid
+key. One narrow window remains when two helpers really run at once. A helper that finds
+neither item, because the other moved it in between, fails that one decrypt, with no data
+loss. The service no longer runs helpers at once, and fixing the window in
+`Secrets.swift` would cost every user an approval, so it is left.
+The old item belongs to the old TreziHost, so deleting it is a change to that item's
+owner. macOS may ask once more for that ("TreziSecrets wants to delete…", Allow). If it
+is denied, the old item stays, unused, and can be removed by hand.
+
+**Expected prompts after updating.**
+
+1. Once: TreziSecrets wants to use `dev.praxis.native.secrets` (enter the login
+   password, then **Always Allow**).
+2. Possibly once: deleting that old item (**Allow**).
+3. Never again for rebuilds, unless `Secrets.swift` or the Swift toolchain changes.
+
+**Operator verification (login keychain; the worker sandbox cannot reach it).**
+
+1. `bun run build`, then `codesign -dvvv out/native/Trezi.app/Contents/Helpers/TreziSecrets 2>&1 | grep -E 'CDHash|Authority|Identifier'`.
+   Note the CDHash; `Authority=Trezi Local` (or Apple Development).
+2. Open Trezi and send a Claude message, or save a key in Settings → AI providers.
+   Expect the prompts above, then choose **Always Allow**.
+3. `security find-generic-password -s dev.praxis.native.secrets -a master-key; echo $?`
+   (attributes only, no prompt). Expected: `security: SecKeychainSearchCopyNext: The
+   specified item could not be found in the keychain.` and `44`, meaning the migration
+   finished. If it still exists, `security delete-generic-password -s dev.praxis.native.secrets -a master-key`
+   removes it (this one may ask).
+4. `security dump-keychain -a ~/Library/Keychains/login.keychain-db | grep -A40 '"dev.trezi.native.secrets"'`.
+   Expected: an `authorizations (…): decrypt` entry whose `requirement:` is
+   `identifier "dev.trezi.secrets" and certificate leaf = H"…"` (or `cdhash H"…"`), and
+   any `partition_id` (`cdhash:` / `teamid:`). Record both in the issue.
+5. Rebuild from another checkout or after `rm -rf out/native`, run step 1 again (same
+   CDHash), quit and reopen Trezi, then send a message: no Keychain prompt.
+6. `printf x | out/native/Trezi.app/Contents/Helpers/TreziSecrets --crypto encrypt --keychain ~/Library/Keychains/login.keychain-db >/dev/null; echo $?`
+   prints `0` with no dialog (`--keychain` disables UI; 1 would mean another approval
+   is needed).
+
+**Network volumes.** The reported request is `kTCCServiceSystemPolicyNetworkVolumes`
+with responsible TreziHost, accessing `…/claude-agent-sdk-darwin-arm64/claude` and
+requesting `com.apple.sandboxd`. `sandboxd` is how macOS files every file-protection TCC
+request, so it does not mean the Bash sandbox made the access. The accessing process is
+the Claude CLI itself. Claude's sandbox settings (`sandbox` in settings, which Trezi
+takes from the user's `~/.claude/settings.json`) confine only the commands Claude runs
+under Seatbelt, not the CLI process. Trezi cannot set them so that the CLI stops
+touching a network volume. The likely trigger is the CLI resolving paths at start
+(`/home` is the autofs `auto_home` map on a default Mac, and any mounted share under
+`/Volumes`). A `denyRead` rule for those paths would make the CLI stat them itself.
+Turning the sandbox off is not an option. So Trezi keeps the sandbox and explains the
+prompt instead: the first Claude turn of a profile shows one status line
+(`src/native/network-volume-note.ts`, preference `trezi:network-volume-note:v1`). It
+says to allow only when the project is on a network drive. macOS remembers either
+answer for the app's stable signature (LKM-137), so the prompt itself is also one-time.
+Codex, Gemini and connection chats do not run the Claude CLI and never show the note
+(`test/network-volume-note.mjs`).
+
+**Bundle ID.** `dev.praxis.native` stays. A rename would reset every TCC grant
+(including this one), the WebKit data store and the app's designated requirement, so
+users would see every prompt again. It is recorded as a kept OS identity in
+`docs/agent-guide/legacy-names.md`. The one "Failed to match existing code requirement"
+line in the TCC log after LKM-137 is the old ad hoc grant being replaced once.
+
 ## Trezi tools from provider helpers (LKM-131)
 
 Since LKM-111 the Claude and Codex adapters run in a provider helper, a separate process

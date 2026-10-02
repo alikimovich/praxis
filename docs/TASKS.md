@@ -3,6 +3,15 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Keychain and network-volume prompts after stable signing (LKM-144)
+
+- [x] Rebuild loop `test/keychain-rebuild.mjs`: the helper builds byte-identical (same CDHash) across folders; on a temporary keychain the rebuild reads the first build's item with no UI, and changed code is refused. No-UI calls only; the keychain part SKIPs where no keychain can be created. A manual probe found that "Trezi Local" items trust the designated requirement, and ad hoc items the CDHash.
+- [x] Repeated migration prompts: `ProviderData.crypto` runs `TreziSecrets` one call at a time with a 180 s timeout (was parallel, killed at 30 s). Test: `test/provider-data.mjs` `keychain-serial`.
+- [x] Migration idempotent and tested (`test/keychain-migration.mjs`). The delete of the old item may ask once; manual cleanup and the expected prompts are documented (README, `docs/PROVIDERS.md`).
+- [x] Network volume: the access comes from the Claude CLI process, outside its own Bash sandbox, so no Trezi setting can stop it while the sandbox stays on. Documented, plus a one-time status line on the first Claude turn (`src/native/network-volume-note.ts`, `test/network-volume-note.mjs`).
+- [x] Bundle ID `dev.praxis.native` kept and recorded as legacy (`docs/agent-guide/legacy-names.md`).
+- [ ] Manager/operator: run the login-keychain steps in `docs/PROVIDERS.md` (LKM-144) on the operator Mac. Record whether a `cdhash:` partition exists and whether a rebuild asks again. Also run `bun run test:keychain-rebuild` outside a sandbox so `rebuild-read` PASSes rather than SKIPs.
+
 ## Stable app identity and no surprise permission prompts (LKM-137)
 
 - [x] The build signs the app, the XPC service, the helpers and the bundled Bun with one identity: `TREZI_SIGN_IDENTITY`, else Apple Development, else "Trezi Local" (created once in the login keychain). "Trezi Local" builds pin the designated requirement to identifier + certificate. Ad hoc fallback with one warning line (`scripts/signing.mjs`).

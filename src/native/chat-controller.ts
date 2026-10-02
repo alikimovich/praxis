@@ -15,6 +15,8 @@ export interface ChatServices {
   invoke: (channel: string, ...args: any[]) => Promise<any>
   render: (state: NativeChatSnapshot) => void
   effect: (effect: NativeChatEffect) => void
+  /** A one-line status shown when a turn starts, e.g. the one-time network-volume note. */
+  notice?: (settings: ChatAgentSettings) => string | undefined
 }
 /** Owns native conversation behavior. No browser, React, DOM or renderer stores. */
 export class NativeChatController {
@@ -225,7 +227,10 @@ export class NativeChatController {
     const { text, attachments, selection, turn } = submission
     chat.messages.push({ id: crypto.randomUUID(), role: 'user', at: Date.now(), text, statuses: [], segments: text ? [{ kind: 'text', text }] : [],
       selection: selection?.bubble, attachments: attachments.map(a => ({ id: a.id, kind: a.type.startsWith('image/') ? 'image' : 'file', name: a.name, path: a.path, ...(a.type.startsWith('image/') ? { url: `data:${a.type};base64,${a.data}` } : {}) })) })
-    assistant(chat); this.changed(chat)
+    assistant(chat)
+    const notice = this.services.notice?.(chat.settings)
+    if (notice) { chat.activityDetail = notice; append(chat, notice, true) }
+    this.changed(chat)
     try {
       const images = attachments.filter(a => a.type.startsWith('image/'))
       const paths = await Promise.all(images.map(a => a.path || this.services.invoke('attachments:save', { mediaType: a.type, data: a.data }, a.name)))

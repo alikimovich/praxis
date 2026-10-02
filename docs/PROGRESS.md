@@ -2,6 +2,19 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-01 — LKM-144: Keychain rebuild loop, one migration prompt, network-volume note
+
+- **Rebuild loop.** `test/keychain-rebuild.mjs` (unit, exclusive, 300 s budget). Two builds of `Secrets.swift` from different folders with the build's swiftc flags are byte-identical (CDHash `7afd5eab…` ad hoc here). Its `rebuild-read` part, on a password-made temporary keychain, has the rebuild read the first build's item with UI disabled and refuses changed code. A manual probe on a temporary keychain showed:
+  - with "Trezi Local", the item's decrypt entry trusts the designated requirement, so first, rebuilt and changed builds all read with UI disabled;
+  - ad hoc, the entry names the CDHash and changed code is refused.
+
+  The test keeps to no-UI calls only. There is no "Trezi Local" signing in it (codesign needs the keychain search list) and no item delete or ACL dump (a non-owner delete can prompt). `keychain-migration` and `keychain-rebuild` bound every `security` call at 30 s. In this worker's sandbox the keychain part SKIPs (it refuses `create-keychain`). Verify quick ran it for real: `rebuild-read` PASS, and `keychain-migration` migrate/fresh/invalid/repeated PASS. The login keychain's `cdhash:` partition (LKM-137) is matched by the unchanged CDHash; the operator steps confirm it.
+- **Rule after the first run.** The first LKM-144 run probed with `security add-generic-password -T`, which hung on a Keychain dialog and blocked the operator's security agent. Workers now never touch the login keychain or run anything that can prompt; such checks are operator steps.
+- **Why prompts repeated.** The service ran `TreziSecrets` on a concurrent queue, killed after 30 s. Reading the old item (owned by the old ad hoc TreziHost) asks for the login password, so each parallel call opened its own dialog, and a kill while the user typed lost the approval. `ProviderData.crypto` serializes the calls with a 180 s timeout. The `keychain-serial` test fails without the lock (negative control run). `Secrets.swift` is unchanged, since every edit there costs users an approval.
+- **Migration.** Already idempotent (`keychain-migration`). Deleting the old item is an owner change, which can prompt once (-25244 with UI off). A denial leaves an unused item. The manual cleanup is documented.
+- **Network volume.** The TCC accessing process is the Claude CLI itself. `sandboxd` as requester is how macOS reports these requests, not proof the Bash sandbox did it, and sandbox settings only confine Claude's commands. No Trezi setting can stop it with the sandbox on, so the first Claude turn of a profile shows one status line explaining it (`src/native/network-volume-note.ts`, `ChatServices.notice`).
+- **Bundle ID** `dev.praxis.native` kept (a rename resets every grant). Recorded in `docs/agent-guide/legacy-names.md`. Details and operator steps: `docs/PROVIDERS.md` (LKM-144).
+
 ## 2026-10-01 — LKM-137 repair: `service-process` unit timeout under parallel swiftc
 
 - Manager quick verification timed out `service-process` at 120 s right after the control-codec PASS line while `service-contract`, `operation-ledger` and `preferences-owner` compiled Swift in parallel. The XPC half had not started yet; this was wall-clock contention, not a new service hang.

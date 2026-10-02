@@ -396,10 +396,8 @@ extension ProviderData {
                 throw ProviderRefusal(.invalidRequest, Self.badSeatToken)
             }
             guard let crypto = tools.crypto, !crypto.isEmpty else { throw ProviderRefusal(.unavailable, Self.noKeyring) }
-            guard let result = try? PlatformTool.run(crypto[0], Array(crypto.dropFirst()) + ["--crypto", "encrypt"],
-                                                     environment: tools.environment, timeout: 30, input: Data(token.utf8)),
-                  result.ok else { throw ProviderRefusal(.unavailable, Self.keychain) }
-            tokens.append((JSText(provider), .string(JSText(result.stdout.base64EncodedString()))))
+            guard let sealed = self.crypto("encrypt", Data(token.utf8)) else { throw ProviderRefusal(.unavailable, Self.keychain) }
+            tokens.append((JSText(provider), .string(JSText(sealed.base64EncodedString()))))
         }
         try prepareDirectory()
         let body = JSValue.object([(JSText("version"), .number(1)), (JSText("tokens"), .object(tokens))])
@@ -409,11 +407,9 @@ extension ProviderData {
 
     /// The plaintext token, or nil (none, or it cannot be decrypted here).
     func seatToken(_ provider: String) -> String? {
-        guard let blob = seatTokens().first(where: { $0.0.string == provider })?.1.text, let crypto = tools.crypto, !crypto.isEmpty,
-              let result = try? PlatformTool.run(crypto[0], Array(crypto.dropFirst()) + ["--crypto", "decrypt"],
-                                                 environment: tools.environment, timeout: 30, input: Self.base64(blob.string)),
-              result.ok else { return nil }
-        let token = String(decoding: result.stdout, as: UTF8.self)
+        guard let blob = seatTokens().first(where: { $0.0.string == provider })?.1.text,
+              let plain = crypto("decrypt", Self.base64(blob.string)) else { return nil }
+        let token = String(decoding: plain, as: UTF8.self)
         return token.isEmpty ? nil : token
     }
 }

@@ -57,6 +57,7 @@ import { setWorkflowOwner, workflowOwner } from '../main/workflow-owner'
 import { servicePlatform } from './platform-service'
 import { type PlatformOwner, setPlatformOwner } from '../main/platform-owner'
 import { installNativeChat } from './chat-runtime'
+import { networkVolumeNote } from './network-volume-note'
 import { NativeShellController } from './shell-controller'
 import { NativeSupportSheets } from './support-sheets'
 import { NativeGitController } from './git-controller'
@@ -309,7 +310,7 @@ async function main() {
   host.on('native-layout-frame', ({ frame }) => {
     void dispatchIPC('main', { type: 'send', channel: 'preview:set-bounds', args: [frame] })
   })
-  const chatController = installNativeChat(host!, mainView)
+  const chatController = installNativeChat(host!, mainView, networkVolumeNote(preferences, reportPreferences))
   const workspaceController = installNativeWorkspace(host!, mainView, workspace, chatController, preferences)
   const contextController = new NativeContextController(workspaceController, chatController, () => ({ projectUi: preferences.get('trezi:project-ui:v1') === 'true', projectUiEngine: preferences.get('trezi:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' }), (channel, ...args) => dispatchIPC('main', { type: 'send', channel, args }))
   const visualEdit = async (root: string, prompt: string) => {

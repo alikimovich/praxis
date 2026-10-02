@@ -28,6 +28,8 @@ Every change that alters user-visible behaviour adds one line under Unreleased.
 
 ### Fixed
 - Chat: the transcript no longer goes blank after sending until scrolled.
+- Keychain: moving the master key from the earlier item asks for your password once instead of once per saved key, and no longer asks again when you take a while to answer.
+- Chat: the first Claude chat explains once why macOS may ask about files on a network volume.
 - Check login and provider helpers no longer use your home folder as the working directory, which could make macOS ask Trezi for Photos access when Claude scanned `~/Pictures`.
 
 ### Removed

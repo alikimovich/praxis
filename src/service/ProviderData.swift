@@ -35,6 +35,23 @@ struct ProviderData {
     var tools: Tools
     var now: @Sendable () -> Double
 
+    /// The Keychain helper may wait on a macOS prompt that asks for the login password
+    /// (LKM-144). Killing it after 30 s threw that answer away, so the next call asked
+    /// again; and parallel calls each showed their own prompt. Calls now run one at a
+    /// time, so the first approval serves the rest, with time to answer.
+    static let keychainLock = NSLock()
+    static let keychainTimeout: TimeInterval = 180
+
+    /// `TreziSecrets --crypto encrypt|decrypt` with `input` on stdin; nil when it failed.
+    func crypto(_ operation: String, _ input: Data) -> Data? {
+        guard let crypto = tools.crypto, !crypto.isEmpty else { return nil }
+        Self.keychainLock.lock(); defer { Self.keychainLock.unlock() }
+        guard let result = try? PlatformTool.run(crypto[0], Array(crypto.dropFirst()) + ["--crypto", operation],
+                                                 environment: tools.environment, timeout: Self.keychainTimeout, input: input),
+              result.ok else { return nil }
+        return result.stdout
+    }
+
     var directory: String { profile + "/trezi" }
     var connectionsFile: String { directory + "/providers.json" }
     var catalogFile: String { directory + "/model-catalog.json" }
@@ -86,10 +103,8 @@ struct ProviderData {
         }
         if !plain.isEmpty {
             guard let crypto = tools.crypto, !crypto.isEmpty else { throw ProviderRefusal(.unavailable, Self.noKeyring) }
-            guard let result = try? PlatformTool.run(crypto[0], Array(crypto.dropFirst()) + ["--crypto", "encrypt"],
-                                                     environment: tools.environment, timeout: 30, input: Data(plain.string.utf8)),
-                  result.ok else { throw ProviderRefusal(.unavailable, Self.keychain) }
-            secret = .string(JSText(result.stdout.base64EncodedString()))
+            guard let sealed = self.crypto("encrypt", Data(plain.string.utf8)) else { throw ProviderRefusal(.unavailable, Self.keychain) }
+            secret = .string(JSText(sealed.base64EncodedString()))
         }
         var fields: [(JSText, JSValue)] = [(JSText("id"), .string(JSText(id))), (JSText("label"), .string(label)),
             (JSText("preset"), .string(JSText(input["preset"]?.text == JSText("custom") ? "custom" : "gateway"))),
@@ -114,11 +129,9 @@ struct ProviderData {
     /// The plaintext key, or nil (none, or it cannot be decrypted here).
     func secret(_ id: String) -> String? {
         guard Self.safeID(id), let found = loadConnections().connections.first(where: { $0["id"]?.text == JSText(id) }),
-              Self.truthy(found["secret"]), let blob = found["secret"]?.text, let crypto = tools.crypto, !crypto.isEmpty,
-              let result = try? PlatformTool.run(crypto[0], Array(crypto.dropFirst()) + ["--crypto", "decrypt"],
-                                                 environment: tools.environment, timeout: 30, input: Self.base64(blob.string)),
-              result.ok else { return nil }
-        return String(decoding: result.stdout, as: UTF8.self)
+              Self.truthy(found["secret"]), let blob = found["secret"]?.text,
+              let plain = crypto("decrypt", Self.base64(blob.string)) else { return nil }
+        return String(decoding: plain, as: UTF8.self)
     }
 
     private func writeConnections(_ connections: [JSValue], corrupt: Bool) throws {
