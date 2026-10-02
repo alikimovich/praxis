@@ -16,7 +16,18 @@ import type { ModelProvider, ProviderSession } from './types'
  * helper → owner: ready, failed, event, record, permission, question, tool, settled,
  *   phase (cold-start progress, LKM-135); diagnosis (the answer to diagnose, then the
  *   helper exits).
+ *
+ * While a turn is open (a `send` until its `done` or `error`), the helper sends a
+ * `progress` event every `heartbeatMs` (LKM-147): the chat knows the turn is alive
+ * through long tool runs and thinking that produce no other event, and shows "No
+ * activity" only when these stop. The owner relays it but never counts it as output.
  */
+let heartbeatMs = 5000
+/** Tests shorten the heartbeat (`test/fixtures/cold-helper.mjs`). */
+export function setHelperHeartbeat(ms: number): void {
+  heartbeatMs = ms
+}
+
 export function runProviderHelper(
   providers: Record<string, ModelProvider>,
   io: { input: Readable; output: Writable; exit: (code: number) => void } = {
@@ -51,10 +62,19 @@ export function runProviderHelper(
     }
   }
 
+  let heartbeat: ReturnType<typeof setInterval> | undefined
+  const beat = (on: boolean): void => {
+    clearInterval(heartbeat)
+    heartbeat = on ? setInterval(() => write({ type: 'event', event: { type: 'progress' } }), heartbeatMs) : undefined
+  }
+
   const onEvent = (tagged: AgentEvent): void => {
     const { projectKey: _key, sessionId: _spawn, ...event } = tagged
     // A terminal event closes the turn: the record goes first, so Bun has it.
-    if (event.type === 'done' || event.type === 'error') session?.finalize()
+    if (event.type === 'done' || event.type === 'error') {
+      beat(false)
+      session?.finalize()
+    }
     flushRecord()
     if (event.type === 'permission-request') {
       const r = event.request
@@ -67,6 +87,7 @@ export function runProviderHelper(
   }
 
   const stop = (code: number): void => {
+    beat(false)
     if (session) {
       session.dispose()
       session.shutdown()
@@ -104,6 +125,7 @@ export function runProviderHelper(
         return
       }
       case 'send':
+        if (session) beat(true)
         return session?.send(String(frame.text ?? ''), Array.isArray(frame.images) ? frame.images : undefined)
       case 'interrupt': {
         const s = session

@@ -6,7 +6,7 @@ import type { NativeChatCommand, NativeChatEffect, NativeChatLayout, NativeChatS
 import type { NativeComposerAction } from '../shared/native-composer'
 import { defaultChoiceFor, providerOptions, resolveSelection } from '../shared/provider-choices'
 import { parseSlashToken } from '../shared/slash-token'
-import { append, assistant, finish, hydrate, late, mirror, newChat, reduce, type Chat, type Submission } from './chat-state'
+import { append, assistant, begin, finish, hydrate, late, mirror, newChat, reduce, type Chat, type Submission } from './chat-state'
 import { matches, permissionModes, snapshot } from './chat-snapshot'
 import { cardAction } from './chat-actions'
 
@@ -134,6 +134,8 @@ export class NativeChatController {
     const chat = this.get(key)
     // A late terminal (an earlier turn's, or one no send accounts for) completes nothing.
     if (late(chat, event)) return
+    // A heartbeat racing the turn's end is not news (and must not flag review).
+    if (event.type === 'progress' && !chat.isRunning) return
     const priorPhase = chat.phase
     reduce(chat, event)
     if (event.type === 'error' || (event.type === 'isolation' && event.state === 'parked')) {
@@ -217,7 +219,7 @@ export class NativeChatController {
     this.changed(chat)
   }
   async run(chat: Chat, submission: Submission) {
-    chat.phase = 'thinking'; chat.activityDetail = ''; chat.stopping = false
+    begin(chat); chat.stopping = false
     chat.sending = true; chat.isRunning = true; chat.turnStartedAt = Date.now(); chat.streamingId = null
     chat.turn = submission.id
     chat.last = submission; chat.login = undefined

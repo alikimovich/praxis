@@ -37,6 +37,12 @@ export interface Chat extends NativeChatMirror {
   login?: ChatLogin
   /** This turn's usage reported before its response exists (`assistant` attaches it). */
   pendingUsage?: TokenUsage
+  /** LKM-147: when the current step (thinking, writing, a tool) began, and when the
+   *  running turn last produced an event or heartbeat (epoch ms). */
+  stepAt: number
+  aliveAt: number
+  /** A `progress` event's step ("Still thinking…"): shown until output or a tool status. */
+  progressStep?: string
 }
 export function newChat(chat: string): Chat {
   return {
@@ -46,8 +52,14 @@ export function newChat(chat: string): Chat {
     turnStartedAt: null, needsReview: false,
     text: '', caret: 0, revision: 0, attachments: [], commands: [], menuIndex: 0, dismissed: false,
     settings: defaultChatAgentSettings(), switching: false, queue: [], paused: false, sending: false,
-    cancellation: 0, permissions: [], questions: [], setup: false, awaitingLanding: false
+    cancellation: 0, permissions: [], questions: [], setup: false, awaitingLanding: false,
+    stepAt: 0, aliveAt: 0
   }
+}
+/** A turn starts thinking: its step timer and liveness start now. */
+export function begin(chat: Chat, now = Date.now()) {
+  chat.phase = 'thinking'; chat.activityDetail = ''; chat.progressStep = undefined
+  chat.stepAt = now; chat.aliveAt = now
 }
 export function assistant(chat: Chat) {
   let message = chat.messages.find(message => message.id === chat.streamingId)
@@ -115,13 +127,19 @@ export function late(chat: Chat, event: AgentEvent) {
   if (event.type === 'done' && event.stale) return true
   return !!(event.turn && chat.turn && event.turn !== chat.turn)
 }
-export function reduce(chat: Chat, event: AgentEvent) {
+export function reduce(chat: Chat, event: AgentEvent, now = Date.now()) {
   chat.version++
+  if (chat.isRunning) chat.aliveAt = now
   switch (event.type) {
     case 'delta':
-      chat.phase = 'writing'; chat.activityDetail = ''; append(chat, event.text); break
+      if (chat.phase !== 'writing') chat.stepAt = now
+      chat.phase = 'writing'; chat.activityDetail = ''; chat.progressStep = undefined; append(chat, event.text); break
     case 'status':
+      chat.stepAt = now; chat.progressStep = undefined
       chat.phase = 'working'; chat.activityDetail = event.text; append(chat, event.text, true); break
+    // Liveness only: the step it names replaces the label (its timer keeps running),
+    // and nothing enters the transcript, so there is one status line (LKM-147).
+    case 'progress': if (event.step) chat.progressStep = event.step; break
     case 'title': chat.title = migrateChatTitle(event.title); break
     case 'commands': chat.commands = event.commands; break
     case 'usage': {

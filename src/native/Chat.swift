@@ -10,7 +10,6 @@ struct ChatMessage: Decodable, Identifiable {
     let id: String; let role: String; let text: String; let segments: [ChatSegment]
     let at: Double?; let workedMs: Double?
     let attachments: [ChatAttachment]?; let selection: ChatSelection?; let revertGroup: String?
-    let tokens: ChatTokens?
 }
 struct ChatAction: Decodable { let label: String; let action: String; let value: String?; let disabled: Bool? }
 struct ChatCard: Decodable, Identifiable { let id: String; let title: String; let detail: String?; let fullDetail: String?; let actions: [ChatAction] }
@@ -58,6 +57,8 @@ final class ChatModel: ObservableObject {
     /// Verification only: the message treated as hovered ("" = none) instead of
     /// the real pointer, so captures do not depend on where the cursor rests.
     @Published var hoverOverride: String?
+    /// The live status lines as rendered this second (LKM-147), for inspection.
+    var statusLines: [String] = []
     var bottomPosition: CGFloat = 0
     var latestButtonFrame = CGRect.zero
     /// What the conversation's SwiftUI views read (see ChatAccessibilityEcho).
@@ -158,8 +159,9 @@ final class NativeChat: NSHostingView<ChatConversation> {
         let tail = model.snapshot?.messages.suffix(3).map { ["id":$0.id, "frame":NSStringFromRect(model.messageFrames[$0.id] ?? .zero)] } ?? []
         return ["scroll":conversationScroll.map(ChatScrollStyleProbe.metrics) ?? [:], "realizedRows":model.messageFrames.count, "latestSettleAttempts":model.latestSettleAttempts, "tailFrames":tail,
          "followRevision":model.followRevision, "controlInteraction":model.controlInteraction, "visibleMessageIDs":model.messageFrames.filter { $0.value.maxY > 0 && $0.value.minY < bounds.height - model.bottomInset }.map(\.key), "bottomPosition":model.bottomPosition, "composerInset":model.bottomInset, "height":bounds.height, "revealRevision":model.revealRevision, "revealAppliedRevision":model.revealAppliedRevision, "revealAttempt":model.revealAttempt, "islandPositions":model.islandPositions.mapValues { NSStringFromRect($0) }, "catPose":model.cat.pose, "catFrame":model.cat.frame, "catArtwork":!CatArtwork.frames.isEmpty, "frame":NSStringFromRect(frame), "native":true, "visible":!isHidden, "chat":model.snapshot?.chat ?? "", "messageCount":model.snapshot?.messages.count ?? 0,
-         "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text,"tokens":$0.tokens?.label ?? ""] } ?? [],
+         "messages":model.snapshot?.messages.map { ["id":$0.id,"role":$0.role,"text":$0.text] } ?? [],
          "footerFrames":model.footerFrames.mapValues { NSStringFromRect($0) }, "revealedActions":model.revealedActions, "messageFrames":model.messageFrames.mapValues { NSStringFromRect($0) },
+         "statusLines":model.statusLines, "activityTokens":model.snapshot?.activity?.tokens?.label ?? "",
          "activity":model.snapshot?.activity?.label ?? "", "activityKind":model.snapshot?.activity?.kind ?? "", "activityAnimated":model.snapshot?.activity?.animated ?? false,
          "islands":model.snapshot?.messages.flatMap { $0.segments.compactMap { $0.island }.map { ["id":$0.id,"revision":$0.revision,"status":$0.status,"title":$0.title,"blocks":$0.blocks.count,"blockKinds":$0.blocks.map(\.kind),"fields":$0.fields.count,"sourceRevision":$0.sourceRevision] as [String: Any] } } ?? [],
          "cards":model.snapshot?.cards.map(\.id) ?? [], "questionCount":model.snapshot?.questions.count ?? 0]
@@ -250,12 +252,11 @@ struct ChatConversation: View {
                     .foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 28)
             }
             ForEach(snapshot.messages) { message in
-                NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.streamingId, activity: message.id == snapshot.streamingId ? snapshot.activity : nil,
-                                 latest: message.id == snapshot.messages.last?.id, model: model).id(message.id)
+                NativeMessageRow(message: message, running: snapshot.running && message.id == snapshot.streamingId, activity: message.id == snapshot.streamingId ? snapshot.activity : nil, model: model).id(message.id)
                     .background(GeometryReader { geometry in Color.clear.preference(key: MessagePositions.self, value: [message.id:geometry.frame(in: .named("chatScroll"))]) })
             }
             if let activity = snapshot.activity, !snapshot.messages.contains(where: { $0.id == snapshot.streamingId }) {
-                ChatActivity(activity: activity, visible: model.visible)
+                ChatTurnFooter(id: "live", activity: activity, visible: model.visible) { EmptyView() }
             }
             ForEach(snapshot.cards) { card in NativeChatCard(card: card, model: model) }
             ForEach(snapshot.questions) { request in NativeQuestionCard(request: request, model: model) }
@@ -323,6 +324,7 @@ struct ChatConversation: View {
                     .onPreferenceChange(IslandPositions.self) { model.islandPositions = $0 }
                     .onPreferenceChange(TurnFooterPositions.self) { model.footerFrames = $0 }
                     .onPreferenceChange(RevealedActions.self) { model.revealedActions = $0 }
+                    .onPreferenceChange(ChatStatusLines.self) { model.statusLines = $0 }
                     .overlay(alignment: .top) {
                         stickyRequest(proxy: proxy)
                     }
@@ -357,7 +359,6 @@ private struct NativeMessageRow: View {
     let message: ChatMessage
     let running: Bool
     let activity: ChatActivityState?
-    let latest: Bool
     @ObservedObject var model: ChatModel
     @State private var hovered = false
     @FocusState private var focusedAction: String?
@@ -392,7 +393,7 @@ private struct NativeMessageRow: View {
                     }
                 }
                 if message.role == "assistant" && (activity != nil || !running) {
-                    ChatTurnFooter(id: message.id, activity: activity, tokens: message.tokens, reservesCount: latest, visible: model.visible) {
+                    ChatTurnFooter(id: message.id, activity: activity, visible: model.visible) {
                         HStack {
                             Button { copyChatText(message.text) } label: { Image(systemName: "doc.on.doc") }
                                 .help("Copy response").accessibilityLabel("Copy response").focused($focusedAction, equals: "copy")

@@ -9,8 +9,6 @@ export interface NativeChatMessage {
   revertGroup?: string
   /** Tokens this assistant turn's model calls reported (cached is part of input). */
   usage?: { input: number; output: number; cached: number }
-  /** Snapshot only: the turn's counter and its tooltip (`chat-snapshot.ts`). */
-  tokens?: { label: string; detail: string }
 }
 
 export interface NativeChatCard {
@@ -27,6 +25,13 @@ export interface NativeChatActivity {
   detail?: string
   kind: 'thinking' | 'writing' | 'working' | 'applying' | 'waiting' | 'stopping'
   animated: boolean
+  /** Epoch ms the current step began: the host ticks "· m:ss" after the label (LKM-147). */
+  since?: number
+  /** Epoch ms of the turn's last event or heartbeat: the host shows "No activity for
+   *  N min" once it is a minute old. Absent while the turn waits for the user. */
+  aliveAt?: number
+  /** The running turn's counter and its tooltip, on its own line under the status. */
+  tokens?: { label: string; detail: string }
 }
 export interface NativeChatState {
   activity: NativeChatActivity | null

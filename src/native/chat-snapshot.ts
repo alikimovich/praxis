@@ -33,15 +33,27 @@ function collapse(chat: Chat, cards: NativeChatCard[], current: NativeChatActivi
 }
 function activity(chat: Chat): NativeChatActivity | null {
   if (!chat.isRunning) return null
-  if (chat.stopping) return { kind: 'stopping', label: 'Stopping…', animated: false }
-  if (chat.permissions.length) return { kind: 'waiting', label: 'Waiting for approval', animated: false }
-  if (chat.questions.length) return { kind: 'waiting', label: 'Waiting for your answer', animated: false }
-  if (chat.phase === 'applying') return { kind: 'applying', label: 'Applying changes…', animated: true }
-  if (chat.phase === 'writing') return { kind: 'writing', label: 'Writing…', animated: true }
-  if (chat.phase === 'working') return { kind: 'working', label: chat.activityDetail.trim() || 'Working…', animated: true }
-  return { kind: 'thinking', label: 'Thinking…', animated: true }
+  const counter = turnUsage(chat)
+  const live = <T extends NativeChatActivity>(state: T): T => ({
+    ...state,
+    ...(counter && !isEmptyUsage(counter) ? { tokens: tokens(counter, chat.usage) } : {})
+  })
+  if (chat.stopping) return live({ kind: 'stopping', label: 'Stopping…', animated: false })
+  if (chat.permissions.length) return live({ kind: 'waiting', label: 'Waiting for approval', animated: false })
+  if (chat.questions.length) return live({ kind: 'waiting', label: 'Waiting for your answer', animated: false })
+  if (chat.phase === 'applying') return live({ kind: 'applying', label: 'Applying changes…', animated: true })
+  // The model's own steps: the host ticks their elapsed time and, when events and
+  // heartbeats stop, says how long nothing arrived (LKM-147).
+  const clock = { ...(chat.stepAt ? { since: chat.stepAt } : {}), ...(chat.aliveAt ? { aliveAt: chat.aliveAt } : {}) }
+  if (chat.phase === 'writing') return live({ kind: 'writing', label: 'Writing…', animated: true, ...clock })
+  if (chat.phase === 'working' && !chat.progressStep) return live({ kind: 'working', label: chat.activityDetail.trim() || 'Working…', animated: true, ...clock })
+  return live({ kind: 'thinking', label: chat.progressStep || 'Thinking…', animated: true, ...clock })
 }
-/** A turn's counter, shown on its own line under the live status while the turn runs (never on finished responses). */
+/** The running turn's usage: on its response, or still waiting for one. */
+function turnUsage(chat: Chat) {
+  return chat.messages.find(m => m.id === chat.streamingId)?.usage ?? chat.pendingUsage
+}
+/** The running turn's counter, on its own line under the live status (LKM-145/147). */
 export function tokens(turn: TokenUsage, total: TokenUsage) {
   const n = (v: number) => v.toLocaleString('en-US')
   return {
@@ -73,7 +85,7 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
   return {
     activity: shown.activity, streamingId: chat.streamingId,
     chat: chat.chat, running: chat.isRunning, cards: shown.cards, questions: chat.questions,
-    messages: shown.messages.map(message => message.usage && !isEmptyUsage(message.usage) ? { ...message, tokens: tokens(message.usage, chat.usage) } : message),
+    messages: shown.messages,
     composer: {
       queue: chat.queue.map(q => ({ id: `queued-${q.id}`, text: q.text, attachments: q.attachments.length })),
       queuePaused: chat.paused,

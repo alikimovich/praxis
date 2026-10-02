@@ -3,6 +3,12 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Live turn progress: timer, current step, streaming tokens (LKM-147)
+
+- [x] One status line: the current step and its elapsed time ("Running bun test · 1:24", "Thinking · 0:45"), ticked by a local one-second clock (`ChatActivityClock.swift`). The owner's "Still thinking…" is a `progress` step, not a transcript row.
+- [x] Live tokens: Claude's partial messages add a throttled chars/4 output estimate between usage reports (`stream-usage.ts`); the counter is the running activity's, on its own line under the status, and gone when the turn ends (LKM-145 layout).
+- [x] Helper heartbeat every 5 s while a turn is open; "No activity for N min" only after 60 s with no event or heartbeat. Heartbeats never count as output for the owner's deadlines.
+- [x] Tests: `test/turn-progress.mjs` (estimate, heartbeat, clock), `test/native-chat-controller.mjs` (progress reduction, live counter), `test/provider-cold-start.mjs` (heartbeats through the owner, no "Still …" status), native-chat-scroll progress stage (one ticking line, idle hint, counter row, footer height) at 440/320 pt.
 ## Stable app identity and no surprise permission prompts (LKM-137)
 
 - [x] The build signs the app, the XPC service, the helpers and the bundled Bun with one identity: `TREZI_SIGN_IDENTITY`, else Apple Development, else "Trezi Local" (created once in the login keychain). "Trezi Local" builds pin the designated requirement to identifier + certificate. Ad hoc fallback with one warning line (`scripts/signing.mjs`).
@@ -13,9 +19,9 @@ Full narrative for shipped work lives in `docs/PROGRESS.md`.
 - [ ] Manager/operator: after this build, confirm on the operator Mac that `codesign -d -r- out/native/Trezi.app` stays the same across two rebuilds, and that the Keychain asks once and then not again.
 ## Token counter only while working; Copy/Revert on hover (LKM-145)
 
-- [x] Counter only while a turn runs, on its own line under the status; finished responses have none. The latest response keeps the counter line (and, while running, the "Worked for" line) reserved, so completion moves nothing above it.
+- [x] Counter only while a turn runs, on its own line under the status; finished responses have none. The footer always reserves the counter line (and a hidden "Worked for" placeholder holds its line while running), so completion moves nothing above it.
 - [x] Copy/Revert always laid out, glyphs hidden until the message is hovered or a button has keyboard focus; explicit accessibility labels, still focusable.
-- [x] `native-chat-scroll` token stage: running/done/hover captures at 440/320 pt; frames unchanged on completion and with/without hover (in-app hover override).
+- [x] `native-chat-scroll` `progress` stage: running/done/hover captures at 440/320 pt; frames unchanged on completion and with/without hover (in-app hover override).
 - [ ] Manager/operator: VoiceOver and Full Keyboard Access check of Copy/Revert on a real session (the SwiftUI accessibility tree cannot be read without an assistive client).
 ## Token counter inline; centered scroll-to-latest button (LKM-141)
 
