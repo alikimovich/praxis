@@ -158,6 +158,13 @@ export async function checkVisibleSettings(host: NativeBridge, artifacts: string
   assert.equal((await inspect()).values.claudePlugins, 'true')
   await choose('claudePlugins', 'false')
   await reopen()
+  // LKM-152: Show Activity automatically defaults to problems that need the user and persists.
+  assert.equal(initial.values.activityAutoOpen, 'problems', 'Show Activity automatically defaults to For problems that need me')
+  await choose('activityAutoOpen', 'never')
+  await reopen()
+  assert.equal((await inspect()).values.activityAutoOpen, 'never')
+  await choose('activityAutoOpen', 'problems')
+  await reopen()
   await select('experimental')
   for (const width of widths) {
     await capture(width, 'off', false, 'agent')

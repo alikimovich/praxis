@@ -107,8 +107,8 @@ export function assertSectionEvidence(
   if (section === 'general')
     assert.deepEqual(
       ids,
-      ['claudePlugins', 'default', 'workspaceIdle'],
-      'General shows the default model, Claude plugins and workspace cleanup pickers'
+      ['activityAutoOpen', 'claudePlugins', 'default', 'workspaceIdle'],
+      'General shows the default model, Claude plugins, workspace cleanup and Activity pickers'
     )
   else assert.ok(ids.every((id) => id === 'connection'), 'AI Providers shows only its provider picker')
   const lines = evidence.text.map(words)

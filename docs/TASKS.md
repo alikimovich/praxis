@@ -3,6 +3,13 @@
 Roadmap / next steps. Tick items as you finish them and log in PROGRESS.md.
 Full narrative for shipped work lives in `docs/PROGRESS.md`.
 
+## Activity opens only when attention is needed (LKM-152)
+
+- [x] Every Activity line has a severity (info, warning, needs-action); only needs-action opens the window, once per event kind per session (`src/native/activity-controller.ts`). Needs-action: failed project open, dev-server crash loop (`NativePreviewSupervisor` gave up), damaged repository/source journals.
+- [x] Startup recovery notices are gray `notice` lines; restored chats and rolled-back source changes collapse into one summary line (`src/native/activity-startup.ts`).
+- [x] Unread dot in the sidebar and a badge on Window → Activity (⌘L, replaces Actions → Toggle Logs); viewing Activity clears both (`src/native/ActivityIndicator.swift`).
+- [x] Settings → General → Show Activity automatically: Never / For problems that need me (default) / Always (`trezi:activity-auto-open:v1`).
+- [x] Tests: `test/activity-attention.mjs`, `test/native-settings.mjs`, `test/native-support.mjs`; native `sheets` (unread dot, ⌘L), `chat-gate` (failed open raises Activity without taking key) and `settings` checks.
 ## Shadow Light drags without flicker (LKM-140)
 
 - [x] Formula (H3) and write order (H2) measured and refuted; HMR swap gap (H1) is the remaining cause (`test/island-flicker.mjs`, numbers in PROGRESS).
