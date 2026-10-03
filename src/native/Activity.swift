@@ -39,7 +39,8 @@ final class NativeActivity: NSObject, NSWindowDelegate {
         var full = ""
         for line in lines {
             let kind = line["kind"] as? String
-            let color: NSColor = kind == "error" ? .systemRed : kind == "warning" ? .systemOrange : kind == "success" ? .systemGreen : .labelColor
+            // Startup recovery notices are gray: nothing was lost (LKM-152).
+            let color: NSColor = kind == "error" || kind == "needs-action" ? .systemRed : kind == "warning" ? .systemOrange : kind == "success" ? .systemGreen : kind == "notice" ? .secondaryLabelColor : .labelColor
             // Lines show collapsed paths (`display`); the tooltip and Copy All keep the full text.
             let time = line["time"] as? String ?? "", original = line["text"] as? String ?? ""
             let shown = line["display"] as? String ?? original
@@ -51,8 +52,14 @@ final class NativeActivity: NSObject, NSWindowDelegate {
         fullText = full
         text.textStorage?.setAttributedString(output)
         if pinned { text.scrollToEndOfDocument(nil) }
-        if window?.isVisible != true { window?.makeKeyAndOrderFront(nil) }
+        // The user's Show takes the key window; an automatic open only orders it front,
+        // so typing in the chat is not interrupted.
+        if state["focus"] as? Bool == true { window?.makeKeyAndOrderFront(nil) }
+        else if state["raise"] as? Bool == true || window?.isVisible != true { window?.orderFront(nil) }
     }
+    /// Unread warnings and needs-action lines while the window was hidden (LKM-152).
+    var unread = 0
+    var unreadLevel = "info"
     @objc func clearLog() { emit(["event":"activity-action", "action":"clear"]) }
     @objc func showRecovery() { emit(["event":"activity-action", "action":"recovery"]) }
     @objc func copyLog() { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(fullText, forType: .string) }

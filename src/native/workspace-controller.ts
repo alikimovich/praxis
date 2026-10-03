@@ -59,6 +59,8 @@ export class NativeWorkspaceController {
     // An adopted external edit: take identity/order/selection, re-send our metadata.
     services.store.subscribe(() => { this.adopt(true); this.changed() })
   }
+  /** Hears a project open that failed with no automatic recovery (the Activity log). */
+  openFailed?: (name: string, message: string) => void
   /** Rendered only: a failing store must not be retried by its own error report. */
   reportError(error: unknown) { this.state.error = String(error); this.publish() }
   get active() { return this.state.projects.find(p => p.key === this.state.activeKey) ?? null }
@@ -331,6 +333,7 @@ export class NativeWorkspaceController {
       if (!current()) return
       this.state.status = { kind: 'error', message: String(error) }
       this.changed()
+      this.openFailed?.(entry.name, String(error))
       // A failed open shows the error and Retry, not the chat (`loadedKey` stays unset);
       // the agent stays attached so "Draft fix in chat" can reveal it.
       await this.services.activate(entry)

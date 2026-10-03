@@ -32,6 +32,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     let layers = NativeLayers()
     let downloads = PreviewDownloads()
     let activity = NativeActivity()
+    let activityIndicator = ActivityIndicator()
     var sourceEditors: [String: NativeSourceEditor] = [:]
     var sourceRoot = ""
     var dockedSource: NativeSourceEditor? { sourceEditors[sourceRoot].flatMap { $0.state["visible"] as? Bool == true && $0.state["popped"] as? Bool != true ? $0 : nil } }
@@ -101,6 +102,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         chatDivider.changed = { [weak self] width in self?.nativeLayout.resized(width) }
         welcome = NativeWelcome(); welcome.frame = canvas.bounds; canvas.addSubview(welcome)
         sheets = NativeSheets(parent: window); activity.parent = window; downloads.parent = window
+        activityIndicator.install(in: shell.sidebar.view)
         nativeLayout = WorkspaceLayout(host: self)
         canvas.changed = { [weak self] in self?.nativeLayout.layout() }
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
@@ -143,7 +145,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         }
         let find = NSMenuItem(title: "Find…", action: #selector(NSTextView.performFindPanelAction(_:)), keyEquivalent: "f"); find.tag = NSTextFinder.Action.showFindInterface.rawValue; edit.addItem(find)
         let actions = submenu("Actions")
-        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle Logs", "l", "logs"), ("Toggle UI", ".", "toggle-chat"),("Check for Updates…", "", "updates"), ("Diagnose Preview…", "", "diagnose"), ("Running Servers…", "", "servers"), ("Send Feedback…", "", "feedback")] {
+        for (label, key, action) in [("Reload Preview", "r", "reload"), ("Toggle UI", ".", "toggle-chat"),("Check for Updates…", "", "updates"), ("Diagnose Preview…", "", "diagnose"), ("Running Servers…", "", "servers"), ("Send Feedback…", "", "feedback")] {
             let item = NSMenuItem(title: label, action: #selector(menuAction(_:)), keyEquivalent: key); item.target = self; item.representedObject = action; actions.addItem(item)
         }
         let develop = submenu("Develop")
@@ -151,6 +153,14 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             let item = NSMenuItem(title: title, action: #selector(showPreviewInspector(_:)), keyEquivalent: key)
             item.target = self; item.representedObject = action; item.keyEquivalentModifierMask = [.command, .option]; develop.addItem(item)
         }
+        // LKM-152: Window → Activity (Command-L) shows the Activity window; it carries the unread badge.
+        let windows = submenu("Window")
+        windows.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windows.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        windows.addItem(.separator())
+        let activityItem = NSMenuItem(title: "Activity", action: #selector(menuAction(_:)), keyEquivalent: "l"); activityItem.target = self; activityItem.representedObject = "activity"; windows.addItem(activityItem)
+        activityIndicator.menuItem = activityItem
+        NSApp.windowsMenu = windows
         NSApp.mainMenu = menu
     }
     /// The standard panel reads "Version 0.1.0 (build N, <short sha>)" from the Info.plist the build stamps (LKM-143).
@@ -258,7 +268,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             else if c["capture"] as? Bool == true { Task { @MainActor in do { reply(id, try await editor.captureToolbar()) } catch { reply(id, error: error.localizedDescription) } } }
             else { reply(id, editor.verifyShortcut(c["key"] as? String ?? "", focus: c["focus"] as? String ?? "code").merging(["toolbar": editor.inspectToolbar()]) { _, new in new }) }
         case "activityState": activity.update(c)
-        case "activityInspect": reply(id, ["visible":activity.window?.isVisible ?? false, "count":activity.count])
+        case "activityUnread": activityIndicator.update(count: c["count"] as? Int ?? 0, level: c["level"] as? String ?? "info")
+        case "activityInspect": reply(id, ["visible":activity.window?.isVisible ?? false, "key":activity.window?.isKeyWindow ?? false, "count":activity.count, "text":String(activity.text.string.suffix(20000))].merging(activityIndicator.inspect()) { _, new in new })
+        case "activityMenu":
+            // Pipe test: Command-L through the main menu's key equivalents, as the keyboard sends it.
+            guard ephemeral, let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: "l", charactersIgnoringModifiers: "l", isARepeat: false, keyCode: 37) else { reply(id, error: "Test profile required"); return }
+            reply(id, ["handled":NSApp.mainMenu?.performKeyEquivalent(with: event) ?? false])
         case "sheetState": sheets.update(c["state"] as? [String: Any] ?? [:])
         case "sheetClose": sheets.close(c["id"] as? String ?? "")
         case "sheetInspect": reply(id, sheets.inspect())

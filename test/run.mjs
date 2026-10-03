@@ -52,6 +52,7 @@ const UNIT = [
   "native-workspace-controller",
   "preview-supervisor",
   "native-support",
+  "activity-attention",
   "display-path",
   "native-sheets",
   "native-settings",

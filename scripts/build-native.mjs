@@ -151,6 +151,7 @@ const result = Bun.spawnSync(
     join(root, 'src/native/SheetSidebar.swift'),
     join(root, 'src/native/SheetVerification.swift'),
     join(root, 'src/native/Activity.swift'),
+    join(root, 'src/native/ActivityIndicator.swift'),
     join(root, 'src/native/SourceEditor.swift'),
     join(root, 'src/native/SourceFileTree.swift'),
     join(root, 'src/native/Layers.swift'),

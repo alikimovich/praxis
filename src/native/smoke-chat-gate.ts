@@ -64,6 +64,11 @@ export async function checkChatGate(host: NativeBridge, fixture: string, artifac
   assert.equal(await settled, null, 'A failed open reports in the workspace, not as a thrown command')
   await until(async () => nativeWorkspace.state.status.kind === 'error' && (await host.request('layoutInspect')).statusKind === 'error', 'failed open')
   const failed = await captureChatGate(host, artifacts, 'failed-open', false)
+  // LKM-152: a failed open has no automatic recovery, so Activity comes to front by itself,
+  // without taking the key window from the chat (the capture above needs it).
+  await until(async () => { const activity = await host.request('activityInspect'); return activity.visible && activity.text.includes('Could not open Folder Gamma') }, 'failed open shows Activity')
+  assert.equal((await host.request('activityInspect')).key, false, 'An automatic Activity open does not take the key window')
+  host.emit('activity-action', { action: 'hide' })
   for (const state of [busy, failed]) {
     assert.equal(state.leading, loaded.leading, `Chat gate ${state.stage}: the chat column keeps its width`)
     assert.equal(state.preview, loaded.preview, `Chat gate ${state.stage}: the preview frame does not move`)

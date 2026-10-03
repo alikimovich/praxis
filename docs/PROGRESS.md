@@ -37,6 +37,18 @@ Newest first. Append a dated entry when you finish a chunk of work.
 - **Limits.**
   - The state lives in the workspace entry, so closing the project forgets it.
   - A project recorded `done` is not offered the card again on an unstamped page. Its stamps reappearing, or removing and re-adding the project, resets that.
+## 2026-10-02 — LKM-152: Activity opens only when attention is needed
+
+- **Why.** Activity opened for every error line, including startup recovery reports and dev-server output, so it popped up on most launches and taught people to close it unread.
+- **Severity.** `append(text, kind, { event, group })` classifies each line as info, warning or needs-action (`severityOf`).
+  - Only needs-action may open the window, at most once per `event` kind per app session (`opened`).
+  - Needs-action events: `project-open-failed` (workspace `select` failure and `openRequested`), `devserver-crash-loop` (new `gaveUp` callback when `NativePreviewSupervisor` exhausts its restarts), `repository-journal` and `source-journal` (damaged journals that need a decision).
+  - An automatic open sends `raise`: Swift orders the window front without making it key, so the main window keeps focus (and the smoke captures that need it). Show/⌘L sends `focus`.
+- **Recovery notices.** `src/native/activity-startup.ts` moved the startup reports out of `index.ts`. They are gray `notice` lines; restored chats and rolled-back source changes collapse into one line ("Restored 4 interrupted chats.") whose tooltip and Copy All keep every original line.
+- **Unread.** Warnings and needs-action lines added while Activity is hidden count as unread (`activityUnread`). `ActivityIndicator.swift` shows a sidebar dot (red for needs-action, orange for warnings) and a badge on Window → Activity (macOS 14+). Clicking it opens Activity; showing Activity clears both.
+- **Menu.** A Window menu (Minimize, Zoom, Activity ⌘L) replaces Actions → Toggle Logs; ⌘L now always shows Activity.
+- **Setting.** Settings → General → "Show Activity automatically" (`trezi:activity-auto-open:v1`): Never, For problems that need me (default), Always (the old behaviour: any error opens a hidden window). The controller reads it on every append, so a change applies at once.
+- **Tests.** `test/activity-attention.mjs` (unit): recovery notices and Vite output never open in any mode, once per kind, collapse count and gray kind, unread and clearing, Never/Always, supervisor gave-up. `test/native-settings.mjs` covers the field, persistence and validation. Native: `sheets` checks the dot and menu badge with Activity hidden, then ⌘L through the main menu; `chat-gate` checks a failed open raises Activity without taking key; `settings` round-trips the choice.
 
 ## 2026-10-02 — LKM-151: Stop never leaves a broken project; one-click recovery
 
