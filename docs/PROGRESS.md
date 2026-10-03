@@ -2,6 +2,37 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-02 — LKM-151: Stop never leaves a broken project; one-click recovery
+
+- **Root cause.** The swiftly-demos incident was a background comment agent that wrote the live file:
+  - The selection prompt (`describeSelectionForPrompt`) gave the picked element's *absolute live* source path.
+  - Background spawns run with `bypassPermissions` (no `canUseTool`), so the agent edited `liveRoot/…/top-app-bar.tsx` directly by absolute path. That bypassed its worktree and the "interrupted turns park" rule.
+  - Stopping between the fragment-open edit and its closing edit left the live JSX unbalanced.
+- **Fix.**
+  - Selection sources are project-relative: `projectRelativeSource`, with the root passed by the context controller and inspector.
+  - A Claude `PreToolUse` hook (`src/main/live-write-guard.ts`) denies edit tools that target the live checkout from a worktree chat and names the worktree path. Hooks run even under bypass.
+- **Post-Stop card.**
+  - A failed or interrupted park carries `reason: 'interrupted'`. A drift conflict stays a conflict even if a later turn on top of it stops.
+  - `src/main/stopped-turn.ts` adds Revert, Undo and Keep:
+    - **Revert** is deferred: the held work is hidden at once and discarded at the next `beforeTurn`, `afterTurn` or `releaseChat`. Undo is a re-hold, so no new Swift API was needed.
+    - **Keep** lands through `completeTurn(land)` plus `recordEdit`, so its Revert group restores bytes.
+  - The stopped message's hover Revert maps to the same revert through a `stopped:` marker group.
+  - `agent:send` is no longer refused while held, so the next message, "Ask agent to finish" and "Send now" all continue the held work.
+- **Preview errors.** `src/shared/dev-error.ts` reads the dev-server log (`runtimeOwner.onLog` → `chatController.devServerLog`). An error naming a file in the chat's last landed turn shows a card with "Revert last turn" (its edit group) and "Fix with agent". A rebuild of the file clears it.
+- **Queue.** The paused row states whether its messages will send. "Resume" is now "Send now", disabled while a conflict blocks it.
+- **Tests.**
+  - `test/stop-recovery.mjs` runs through the Swift owners, in the repository-owner suites. It checks:
+    - stop mid-edit leaves the live checkout byte-identical (CRLF/UTF-8 fixture);
+    - revert, undo and settle;
+    - Keep followed by `revertGroup` is byte-exact;
+    - finish lands everything;
+    - the drift case.
+  - `test/stop-recovery-ui.mjs` (unit) covers the guard, relative sources, the reader, the controller cards and actions, and the queue note and Send now.
+- **Limits.**
+  - Non-Git or subdirectory projects still write live.
+  - Shell and non-Claude edits are not covered by the guard.
+  - Error detection is a log heuristic.
+
 ## 2026-10-02 — LKM-140 (review fix): only a Shadow block's own gesture takes the override path
 
 - **Regression found in review.** `ChatIslands.gestureFrame` sent every gesture of an island through the override path when the island had any Shadow block. The schema allows a Shadow block together with group/point blocks and more than one Shadow block, which led to two problems:

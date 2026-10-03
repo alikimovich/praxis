@@ -312,6 +312,8 @@ async function main() {
     void dispatchIPC('main', { type: 'send', channel: 'preview:set-bounds', args: [frame] })
   })
   const chatController = installNativeChat(host!, mainView, networkVolumeNote(preferences, reportPreferences))
+  // LKM-151: a compile/parse error in a file the last turn touched gets Trezi's own recovery card.
+  runtimeOwner.onLog((root, line) => chatController.devServerLog(root, line))
   const workspaceController = installNativeWorkspace(host!, mainView, workspace, chatController, preferences)
   const contextController = new NativeContextController(workspaceController, chatController, () => ({ projectUi: preferences.get('trezi:project-ui:v1') === 'true', projectUiEngine: preferences.get('trezi:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' }), (channel, ...args) => dispatchIPC('main', { type: 'send', channel, args }))
   const visualEdit = async (root: string, prompt: string) => {

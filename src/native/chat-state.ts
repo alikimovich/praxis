@@ -43,7 +43,16 @@ export interface Chat extends NativeChatMirror {
   aliveAt: number
   /** A `progress` event's step ("Still thinking…"): shown until output or a tool status. */
   progressStep?: string
+  /** LKM-151: a stopped turn's work is on hold ('held', live never had it) or the user
+   *  reverted it ('reverted', undoable until the next turn starts). */
+  stopped?: 'held' | 'reverted'
+  /** LKM-151: the files and undo group of the last turn that landed on the live tree. */
+  landed?: { files: string[]; group?: string }
+  /** LKM-151: a dev-server compile/parse error in a file the last turn touched. */
+  previewError?: { file: string; message: string }
 }
+/** The hover Revert of a stopped turn's message: routes to the held-work revert. */
+export const STOPPED_GROUP = 'stopped:'
 export function newChat(chat: string): Chat {
   return {
     phase: 'thinking', activityDetail: '', stopping: false,
@@ -169,15 +178,19 @@ export function reduce(chat: Chat, event: AgentEvent, now = Date.now()) {
     case 'reconciliation-started':
       chat.isolation = 'isolated'; chat.isRunning = true; chat.phase = 'applying'
       append(chat, 'Combining this chat’s changes with recent project edits…', true); break
-    case 'isolation':
+    case 'isolation': {
       chat.isolation = event.state === 'parked' ? 'parked' : 'isolated'
       chat.isolationFiles = event.files
-      if (event.state === 'merged' && event.group && event.revertable !== false) {
-        const last = [...chat.messages].reverse().find(message => message.role === 'assistant')
-        if (last) last.revertGroup = event.group
-      }
+      const last = [...chat.messages].reverse().find(message => message.role === 'assistant')
+      if (last?.revertGroup?.startsWith(STOPPED_GROUP)) last.revertGroup = undefined
+      chat.stopped = event.reason === 'interrupted' ? 'held' : event.reason === 'reverted' ? 'reverted' : undefined
+      if (event.state === 'merged' && event.group && event.revertable !== false && last) last.revertGroup = event.group
+      if (event.state === 'merged') chat.landed = { files: event.files ?? [], group: event.revertable === false ? undefined : event.group }
+      // A stopped turn's message keeps its hover Revert: it drops the held work.
+      if (chat.stopped === 'held' && last) last.revertGroup = `${STOPPED_GROUP}${chat.chat}`
       if (event.state === 'parked') chat.paused = true
       break
+    }
     case 'permission-request':
       chat.permissions = [...chat.permissions.filter(p => p.id !== event.request.id), event.request]; break
     case 'permission-resolved': chat.permissions = chat.permissions.filter(p => p.id !== event.id); break

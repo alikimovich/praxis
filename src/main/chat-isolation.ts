@@ -75,6 +75,11 @@ interface ChatState {
   /** Marker-bearing files after `stageResolve`; retained so preparing twice is
    *  idempotent instead of erasing the only recovery diff on the second call. */
   resolvingFiles: string[] | null
+  /** The park came from a stopped/failed turn, not live drift (LKM-151). */
+  interrupted: boolean
+  /** The user reverted the stopped turn: the live tree never had it, and the held work
+   *  is discarded at the next turn start (or release) unless they undo first. */
+  reverted: boolean
   turnNo: number
   /** Per-chat serialization chain (sync + merge queue). */
   chain: Promise<unknown>
@@ -113,7 +118,8 @@ function emitIsolation(
   branch?: string,
   files?: string[],
   group?: string,
-  revertable?: boolean
+  revertable?: boolean,
+  reason?: 'interrupted' | 'reverted'
 ): void {
   // Guard a destroyed webContents: this fires from async turn lifecycle hooks,
   // which can land after the renderer process is killed (OS display sleep).
@@ -126,6 +132,7 @@ function emitIsolation(
       ...(files && files.length ? { files } : {}),
       ...(group ? { group } : {}),
       ...(revertable !== undefined ? { revertable } : {}),
+      ...(reason ? { reason } : {}),
       projectKey: sessionKey
     } satisfies AgentEvent)
 }
@@ -162,6 +169,8 @@ export async function isolatedCwd(liveRoot: string, sessionKey: string): Promise
       parkRecordId: null,
       parkedFiles: [],
       resolvingFiles: null,
+      interrupted: false,
+      reverted: false,
       turnNo: 0,
       chain: Promise.resolve(),
       lastUsed: Date.now(),
@@ -223,12 +232,26 @@ export async function beforeTurn(sessionKey: string, _text: string): Promise<voi
   const task = st.chain.then(() =>
     enqueueRepoWrite(st.liveRoot, async () => {
       await recreateWorkspace(st)
+      await settleReverted(st)
       if (st.parked) return
       await syncFromLive(st.liveRoot, st.wt)
     })
   )
   st.chain = task.catch(() => {})
   await task
+}
+
+/** Drop a reverted stopped turn's held work for good (inside the repository lease).
+ *  The owner keeps a recovery ref of what it discards. */
+async function settleReverted(st: ChatState): Promise<void> {
+  if (!st.reverted) return
+  await discardParked(st.wt)
+  await retireWorktreeBranch(st.wt)
+  st.parked = false
+  st.interrupted = false
+  st.reverted = false
+  st.parkedFiles = []
+  st.resolvingFiles = null
 }
 
 /** The tail of a transcript from its LAST user message on — the "last turn" a park
@@ -265,6 +288,7 @@ export function afterTurn(
       enqueueRepoWrite(st.liveRoot, async () => {
         st.lastUsed = Date.now()
         if (st.reclaimed) return null
+        await settleReverted(st)
         const turnNo = ++st.turnNo
         let outcome = await completeTurn(st.liveRoot, st.wt, message, {
           land: terminal === 'success'
@@ -299,20 +323,26 @@ export function afterTurn(
             st.parked = false
             dropParkRecord(st)
           }
+          st.interrupted = false
           st.parkedFiles = []
           st.resolvingFiles = null
           await retireWorktreeBranch(st.wt)
           // Not revertable once this chat's work has been pushed & merged via a PR.
           emitIsolation(sessionKey, 'merged', st.wt.branch, outcome.files, group, !st.record?.prUrl)
         } else if (outcome.outcome === 'parked') {
+          // A stopped or failed turn holds its work (LKM-151); a drift park stays a
+          // conflict even when a later turn on top of it is stopped.
+          st.interrupted = terminal !== 'success' && (!st.parked || st.interrupted)
           st.parked = true
           st.parkedFiles = outcome.files
           const markers = await conflictMarkerFiles(st.wt, outcome.files)
           st.resolvingFiles = markers.length ? markers : null
           upsertParkRecord(st, outcome.files, turn)
-          if (!reconcileFiles) emitIsolation(sessionKey, 'parked', st.wt.branch, outcome.files)
+          if (!reconcileFiles)
+            emitIsolation(sessionKey, 'parked', st.wt.branch, outcome.files, undefined, undefined, st.interrupted ? 'interrupted' : undefined)
         } else if (outcome.newBase) {
           st.parked = false
+          st.interrupted = false
           st.parkedFiles = []
           st.resolvingFiles = null
           dropParkRecord(st)
@@ -333,8 +363,18 @@ export function afterTurn(
 /** Restore the fallback after an automatic attempt was cancelled or unavailable. */
 export function showParkedChat(sessionKey: string): void {
   const st = states.get(sessionKey)
-  if (st?.parked) emitIsolation(sessionKey, 'parked', st.wt.branch, st.parkedFiles)
+  if (st?.parked && !st.reverted)
+    emitIsolation(sessionKey, 'parked', st.wt.branch, st.parkedFiles, undefined, undefined, st.interrupted ? 'interrupted' : undefined)
 }
+
+/** The seam `stopped-turn.ts` (LKM-151) uses for a stopped turn's held work. */
+export const stoppedTurnSeam = {
+  state: (sessionKey: string) => states.get(sessionKey),
+  emit: emitIsolation,
+  holdRecord: (st: ChatState, files: string[]) => upsertParkRecord(st, files),
+  dropRecord: (st: ChatState) => dropParkRecord(st)
+}
+export type IsolatedChat = ChatState
 
 /**
  * Persist (or refresh) a park `SessionRecord` keyed `chatpark-<wtId>` under its OWNING
@@ -463,6 +503,8 @@ export async function applyParkedBranch(
         body: 'Trezi parked-chat apply.'
       })
       st.parked = false
+      st.interrupted = false
+      st.reverted = false
       st.parkedFiles = []
       st.resolvingFiles = null
       dropParkRecord(st)
@@ -503,6 +545,8 @@ export async function discardParkedBranch(
   st.chain = task.catch(() => {})
   await task.catch(() => {})
   st.parked = false
+  st.interrupted = false
+  st.reverted = false
   st.parkedFiles = []
   st.resolvingFiles = null
   dropParkRecord(st)
@@ -559,6 +603,8 @@ export async function resolveParkedChat(
           body: `Trezi conflict resolution (${st.wt.branch}).`
         })
         st.parked = false
+        st.interrupted = false
+        st.reverted = false
         st.parkedFiles = []
         st.resolvingFiles = null
         dropParkRecord(st)
@@ -572,6 +618,8 @@ export async function resolveParkedChat(
         // Leaving the chat parked here made "Resolve it" a silent infinite loop:
         // ok:true + still-parked re-renders the same card. Unpark.
         st.parked = false
+        st.interrupted = false
+        st.reverted = false
         st.parkedFiles = []
         st.resolvingFiles = null
         dropParkRecord(st)
@@ -591,6 +639,8 @@ export async function resolveParkedChat(
       if (res.ok) {
         if (res.newBase) st.wt.baseSha = res.newBase
         st.parked = false
+        st.interrupted = false
+        st.reverted = false
         st.parkedFiles = []
         st.resolvingFiles = null
         dropParkRecord(st)
@@ -761,6 +811,7 @@ export async function releaseChat(
     await st.chain.catch(() => {})
     await enqueueRepoWrite(st.liveRoot, async () => {
       if (st.reclaimed) return // idle cleanup already removed the checkout and branch
+      await settleReverted(st)
       if (!st.parked) {
         const turnNo = ++st.turnNo
         const outcome = await completeTurn(st.liveRoot, st.wt, 'trezi chat changes', {
@@ -804,12 +855,14 @@ export function dropAll(): void {
  *  live). */
 export function isolationSnapshot(
   sessionKey: string
-): { state: 'live' | 'isolated' | 'parked'; branch?: string } | undefined {
+): { state: 'live' | 'isolated' | 'parked'; branch?: string; reason?: 'interrupted' } | undefined {
   const st = states.get(sessionKey)
   if (!st) return undefined
+  const parked = st.parked && !st.reverted
   return {
-    state: st.parked ? 'parked' : 'isolated',
-    ...(st.wt.branch ? { branch: st.wt.branch } : {})
+    state: parked ? 'parked' : 'isolated',
+    ...(st.wt.branch ? { branch: st.wt.branch } : {}),
+    ...(parked && st.interrupted ? { reason: 'interrupted' as const } : {})
   }
 }
 

@@ -44,6 +44,9 @@ export interface NativeChatState {
   composer: {
     queue: { id: string; text: string; attachments: number }[]
     queuePaused: boolean
+    /** LKM-151: why a paused queue will not send on its own, and whether "Send now" can. */
+    queueNote: string
+    queueCanSend: boolean
     ready: boolean; running: boolean; thinking: boolean
     text: string; caret: number; revision: number; stop: boolean; enabled: boolean; sendLabel: string
     context: string; attachments: { id: string; name: string; type: string; data: string }[]

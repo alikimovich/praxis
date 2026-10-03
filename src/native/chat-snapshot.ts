@@ -8,6 +8,7 @@ import { parseSlashToken } from '../shared/slash-token'
 import { rankSlashMatches } from '../shared/slash-menu'
 import type { Chat } from './chat-state'
 import { loginCard } from './chat-login'
+import { queueNote, recoveryCards } from './chat-recovery'
 export const permissionModes = [
   { value: 'auto', label: 'Auto' }, { value: 'acceptEdits', label: 'Allow edits' }, { value: 'default', label: 'Ask always' }
 ]
@@ -73,7 +74,8 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
   const context = chat.context
   if (context?.setup.needed && !context.setup.dismissed) cards.push({ id: 'setup', title: 'Connect this project to Trezi', detail: context.setup.status ?? undefined, actions: [{ label: 'Not now', action: 'setup-dismiss', disabled: chat.setup }, { label: chat.setup ? 'Stop' : 'Set up', action: chat.setup ? 'stop' : 'setup', disabled: chat.isRunning && !chat.setup }] })
   if (!context?.setup.needed && context?.tokens.needed && !context.tokens.dismissed) cards.push({ id: 'tokens', title: 'Add a starter design-token palette?', actions: [{ label: 'Not now', action: 'tokens-dismiss' }, { label: 'Add tokens', action: 'tokens' }] })
-  if (chat.isolation === 'parked') cards.push({ id: 'conflict', title: 'These edits need reconciliation', detail: chat.isolationFiles?.join('\n'), actions: [{ label: 'Discard', action: 'discard', disabled: chat.isRunning }, { label: 'Resolve', action: 'resolve', disabled: chat.isRunning }] })
+  cards.push(...recoveryCards(chat))
+  if (chat.isolation === 'parked' && chat.stopped !== 'held') cards.push({ id: 'conflict', title: 'These edits need reconciliation', detail: chat.isolationFiles?.join('\n'), actions: [{ label: 'Discard', action: 'discard', disabled: chat.isRunning }, { label: 'Resolve', action: 'resolve', disabled: chat.isRunning }] })
   for (const p of chat.permissions) cards.push({ id: p.id, title: p.title, detail: p.detail, actions: [{ label: 'Deny', action: 'permission', value: 'deny' }, { label: 'Allow', action: 'permission', value: 'allow' }] })
   for (const n of context?.notes ?? []) cards.push({ id: n.id, title: 'Note', detail: n.text, actions: [{ label: 'Remove', action: 'remove-note' }] })
   if (context?.notes.length) cards.push({ id: 'notes-publish', title: 'Publish notes as a PR', actions: [{ label: 'Publish PR', action: 'publish-notes' }] })
@@ -88,7 +90,7 @@ export function snapshot(chat: Chat, choices: ModelChoice[]): NativeChatState {
     messages: shown.messages,
     composer: {
       queue: chat.queue.map(q => ({ id: `queued-${q.id}`, text: q.text, attachments: q.attachments.length })),
-      queuePaused: chat.paused,
+      queuePaused: chat.paused, ...queueNote(chat),
       text: chat.text, caret: chat.caret, revision: chat.revision, stop,
       ready: chat.ready && !chat.switching, running: chat.isRunning, thinking,
       enabled: chat.ready && (stop || (!chat.switching && (!!chat.text.trim() || !!chat.attachments.length))),

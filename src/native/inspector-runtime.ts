@@ -51,14 +51,14 @@ export function installNativeInspector(host: NativeBridge, workspace: NativeWork
     else if (channel === 'preview:toolbar-action') {
       if (value === 'props') { controller.state.visible = !controller.state.visible; controller.publish() }
       else if (value === 'code' && controller.element?.source) openSource(controller.element.source)
-      else if (value === 'delete' && controller.element) void chat.command({ type: 'submit', chat: entry.activeSessionKey, text: describeSelectionForPrompt(controller.element) + 'Delete the selected element(s) from the source. Remove wrappers, imports, and styles that exist only for them.' }).catch(report)
+      else if (value === 'delete' && controller.element) void chat.command({ type: 'submit', chat: entry.activeSessionKey, text: describeSelectionForPrompt(controller.element, entry.root) + 'Delete the selected element(s) from the source. Remove wrappers, imports, and styles that exist only for them.' }).catch(report)
     } else if (channel === 'preview:text-edit') {
       void workspace.services.invoke('text:apply', entry.root, value).then(result => { if (!result.applied) return visualEdit(entry.root, result.agentPrompt ?? `In ${value.source}, change only the selected element's text to ${JSON.stringify(value.text)}.`) }).catch(report)
     } else if (channel === 'preview:comment') {
       if (value.kind === 'annotate') void workspace.services.invoke('annotations:add', entry.root, { source: value.el.source, selector: value.el.selector, tag: value.el.tag, text: value.text }).catch(report)
       else {
         const parent = entry.activeSessionKey
-        const prompt = describeSelectionForPrompt(value.el) + oneLine(value.text, 2000), current = chat.chats.get(parent)
+        const prompt = describeSelectionForPrompt(value.el, entry.root) + oneLine(value.text, 2000), current = chat.chats.get(parent)
         void workspace.services.invoke('agent:spawn-comment', entry.root, prompt, parent, backgroundAgentOptions(current ? agentOptionsFor(current.settings) : {}, 'comment'), 'comment').then(result => {
           if (!result.ok && ['not-a-repo', 'unsupported-backend'].includes(result.reason)) return chat.command({ type: 'submit', chat: parent, text: prompt })
           if (!result.ok) report(result.reason ?? 'Could not start the comment agent.')

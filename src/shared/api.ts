@@ -378,6 +378,9 @@ export type AgentEvent = (
       /** On 'merged': whether this turn is safely revertable (false once the chat's
        *  work has been pushed & merged via a PR) — the renderer hides Revert if false. */
       revertable?: boolean
+      /** LKM-151: 'interrupted' on a park held from a stopped/failed turn (live never
+       *  had it); 'reverted' on the 'isolated' that follows the user reverting it. */
+      reason?: 'interrupted' | 'reverted'
     }
 ) & {
   /** Which project's session emitted this — set by main so the renderer routes it
@@ -621,7 +624,7 @@ export interface LiveChatSnapshot {
   turn?: string | null
   /** Per-chat worktree isolation status (v9), for the renderer to rehydrate the chat's
    *  isolation chip after a reload. Absent for a non-isolated chat (treated as 'live'). */
-  isolation?: { state: 'live' | 'isolated' | 'parked'; branch?: string }
+  isolation?: { state: 'live' | 'isolated' | 'parked'; branch?: string; reason?: 'interrupted' }
   /** The options this session is ACTUALLY running with (main's live copy — the
    *  authority). The renderer reconciles its per-chat pickers against these on
    *  reattach so a reload can't leave the toolbar showing a posture the session
