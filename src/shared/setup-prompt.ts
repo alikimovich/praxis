@@ -3,7 +3,25 @@ import type { SetupResult } from './api'
 export function setupPrompt(res: SetupResult): string | null {
   const file = res.files?.[0]
   const proof = res.helpers?.map((h) => `${h.path}: SHA-256 ${h.sha256}`).join('\n') ?? ''
-  const verify = `Before changing config, read the helpers in this checkout and verify these hashes:\n${proof}\nIf a helper is absent or differs, stop and report it. `
+  const copied = res.checkout ? `Trezi copied them into this chat workspace (${res.checkout}); the dev server uses the live project's copies. Never write .trezi/ yourself. ` : ''
+  const verify = `Before changing config, read the helpers in this checkout and verify these hashes:\n${proof}\n${copied}If a helper is absent or differs, stop and report it. `
+  if (res.strategy === 'vite-plugin') {
+    const vite = res.vite
+    const plugin = vite?.reactPlugin ? `${vite.reactPlugin} ${vite.reactPluginVersion ?? '(version unknown)'}` : 'no React plugin'
+    return (
+      verify +
+      `Trezi detected a React project on Vite ${vite?.version ?? `(not installed; declared ${vite?.declaredVersion ?? 'unknown'})`} with ${plugin}, ` +
+      `and added a dev-only Vite plugin at \`.trezi/trezi-vite.mjs\` that runs \`${file}\` before Vite's own JSX transform ` +
+      `(Vite 8 transforms with Oxc and @vitejs/plugin-react 6 has no babel option, so do NOT use \`react({ babel })\`). Please: ` +
+      `(1) read the real vite.config.* and import the default export of ./.trezi/trezi-vite.mjs (relative to the config file); ` +
+      `(2) put \`trezi()\` FIRST in \`plugins\`, keeping every existing plugin and option (the plugin is serve-only already; ` +
+      `if the config is a function you may also gate it on \`command === 'serve'\`); ` +
+      `(3) add @babel/core as a development dependency if it is missing, with the project's package manager. ` +
+      `If the config shape differs, adapt to the real file or tell me what's blocking rather than guessing. ` +
+      `Preserve existing component types; do not bulk-annotate components. ` +
+      `Only change build integration. Trezi will restart the preview and check for stamps before declaring setup complete.`
+    )
+  }
   switch (res.framework) {
     case 'next':
       return (

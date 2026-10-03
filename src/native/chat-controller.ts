@@ -146,7 +146,9 @@ export class NativeChatController {
     const priorPhase = chat.phase
     reduce(chat, event)
     if (event.type === 'error' || (event.type === 'isolation' && event.state === 'parked')) {
-      if (chat.setup || chat.awaitingLanding) this.services.effect({ type: 'setup', chat: key, phase: 'failed' })
+      if (chat.setup || chat.awaitingLanding) this.services.effect({ type: 'setup', chat: key, phase: 'failed', status: event.type === 'error'
+        ? `the setup turn stopped with an error: ${event.message}`
+        : 'the setup changes were held in the chat workspace instead of landing, so the preview was not restarted. Resolve or discard them, then retry.' })
       chat.setup = false; chat.awaitingLanding = false
     }
     if (event.type === 'done' && chat.setup) {
@@ -155,7 +157,11 @@ export class NativeChatController {
       else chat.awaitingLanding = true
     }
     if (event.type === 'isolation' && event.state === 'merged' && chat.awaitingLanding) {
-      chat.awaitingLanding = false; this.services.effect({ type: 'setup', chat: key, phase: 'landed' })
+      chat.awaitingLanding = false
+      // A turn that changed nothing (e.g. the agent stopped to ask) is still checked: the
+      // config may already be wired. If no stamps appear, this is the reason shown.
+      this.services.effect({ type: 'setup', chat: key, phase: 'landed',
+        ...(event.files?.length === 0 ? { status: 'the setup turn finished without changing any file. Its reply in this chat says why.' } : {}) })
     }
     if (!chat.isRunning && key !== this.active) chat.needsReview = true
     if (event.type === 'delta' && priorPhase === 'writing') {
@@ -262,7 +268,7 @@ export class NativeChatController {
   async stop(chat: Chat) {
     chat.paused = true; chat.cancellation++; chat.stopping = true
     this.changed(chat)
-    if (chat.setup || chat.awaitingLanding) this.services.effect({ type: 'setup', chat: chat.chat, phase: 'failed', status: 'Setup cancelled.' })
+    if (chat.setup || chat.awaitingLanding) this.services.effect({ type: 'setup', chat: chat.chat, phase: 'failed', status: 'it was stopped before it finished.' })
     chat.setup = false; chat.awaitingLanding = false
     await this.services.invoke('agent:interrupt', chat.chat)
   }

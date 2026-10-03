@@ -2,6 +2,41 @@
 
 Newest first. Append a dated entry when you finish a chunk of work.
 
+## 2026-10-02 — LKM-153: Connect to Trezi from chat worktrees, Vite 8 stamping, remembered state
+
+- **Root cause.** The swiftly-demos chat had a stopped (parked) turn. `beforeTurn` returned early for a parked chat, so it skipped the helper sync too. The setup agent found no `.trezi/trezi-source.cjs` in its worktree and stopped. The card then fell back to "no elements got stamped". The project is also React on Vite 8, where `react({ babel })` cannot stamp at all.
+- **Helpers in worktrees (option 1: Trezi writes them).**
+  - `beforeTurn` syncs helpers for parked chats too. This is safe because `.trezi/` is excluded from snapshots, landings and cleans.
+  - `setup:scaffold` now takes the chat key. After the live write it runs `syncChatHelpers` (on the chat's repository queue, recreating an idle-removed worktree) and checks every SHA-256 in the checkout. It fails with the exact path otherwise.
+  - The prompt says the helpers were copied there and never to write `.trezi/`.
+  - Rejected: pointing the agent at the live absolute path, because the relative import and its own checks resolve in the checkout. Also rejected: letting agents write `.trezi/`. Reasons in `docs/WORKTREES.md`.
+- **Vite.**
+  - One `enforce: 'pre'`, `apply: 'serve'` plugin, `.trezi/trezi-vite.mjs` (`src/main/setup-vite.ts`), serves every Vite version and React plugin. It runs the unchanged `trezi-source.cjs` visitor through the project's `@babel/core` before esbuild/Oxc, so the stamps match.
+  - The plugin logs `[trezi-source] …` when `@babel/core` or the helper is missing.
+  - Detection reads the installed Vite and React plugin versions from `node_modules` folders, not the resolver, which would make Bun try an auto-install.
+  - Swift `WorkflowSetup`/`EditingProject` allowlists include the new helper.
+  - Next keeps its loader and plain HTML its serve-time stamping (no card).
+- **Remembered state.**
+  - `ProjectEntry.sourceSetup` (`done` / `declined` / `failed` + reason + at) is validated by both `METADATA_FIELDS` and `WorkspaceOperation.validField`. It persists through the workspace store, so it survives relaunch.
+  - The card shows only while stamps are 0, the user has not declined and the project was never seen stamped. Stamps hide it and record `done`.
+  - Failures show `Setup failed: <reason>` with **Retry**:
+    - a scaffold or copy error;
+    - a setup turn that errored, was stopped or was held;
+    - a landed turn whose restarted preview still has no stamps after `verifyGraceMs`. This one quotes the dev server's `[trezi-source]` line (via `runtimeOwner.onLog`) or notes that the turn changed no file.
+- **Tests.**
+  - `test/setup-worktree.mjs` (repository-owner suites, Swift owners) parks a chat on a Vite 8 React fixture, then:
+    - Set up copies byte-identical helpers into the parked worktree;
+    - a parked `beforeTurn` restores a deleted helper;
+    - the wiring lands live without any `.trezi` file;
+    - the live plugin stamps the JSX.
+  - `test/setup-vite.mjs` (unit) covers Vite 7/8, SWC, non-Vite React, Next and HTML detection, the prompt, and plugin transforms and warnings.
+  - `test/setup-vite-real.mjs` (unit) installs real Vite 7 and 8 fixtures and checks served modules through `createServer`. It prints SKIP without the registry.
+  - `test/native-context.mjs` covers Not now across relaunch, failure plus Retry across relaunch, the dev-server reason, the verified card disappearing and `done`.
+  - `test/workflow-owner.mjs` covers write and remove of the Vite helper.
+  - `test/workspace-owner.mjs` covers field validation.
+- **Limits.**
+  - The state lives in the workspace entry, so closing the project forgets it.
+  - A project recorded `done` is not offered the card again on an unstamped page. Its stamps reappearing, or removing and re-adding the project, resets that.
 ## 2026-10-02 — LKM-152: Activity opens only when attention is needed
 
 - **Why.** Activity opened for every error line, including startup recovery reports and dev-server output, so it popped up on most launches and taught people to close it unread.

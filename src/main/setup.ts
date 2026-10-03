@@ -1,10 +1,13 @@
 import { MDX_HELPER, MDX_HELPER_CONTENT } from './setup-mdx'
 import { REACT_HELPER_CONTENT } from './setup-react'
 import { detectNext, NEXT_LOADER, NEXT_ADAPTER, NEXT_LOADER_CONTENT, NEXT_ADAPTER_CONTENT } from './setup-next'
+import { detectVite, VITE_HELPER, VITE_HELPER_CONTENT } from './setup-vite'
 import { ipcMain } from '../native/platform'
+import { createHash } from 'crypto'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import type { Frontend, SetupResult, SetupStrategy } from '../shared/api'
+import { syncChatHelpers } from './chat-isolation'
 import { workflowOwner, type HelperFile } from './workflow-owner'
 
 /**
@@ -144,6 +147,7 @@ export interface Detected {
   strategy: SetupStrategy
   svelteMajor?: number
   next?: SetupResult['next']
+  vite?: SetupResult['vite']
 }
 
 /** Detect the UI framework from deps FIRST — never assume React. */
@@ -170,7 +174,9 @@ export async function detect(root: string): Promise<Detected> {
     has('@vitejs/plugin-react') ||
     has('@vitejs/plugin-react-swc')
   ) {
-    return { framework: 'react', strategy: 'babel-plugin' }
+    // Vite (any version) gets Trezi's pre-transform plugin; other React builds keep Babel.
+    const vite = await detectVite(root)
+    return vite ? { framework: 'react', strategy: 'vite-plugin', vite } : { framework: 'react', strategy: 'babel-plugin' }
   }
   // Solid also uses JSX, so the same Babel JSX visitor works.
   if (has('solid-js')) return { framework: 'solid', strategy: 'babel-plugin' }
@@ -186,6 +192,7 @@ export function helperFiles(d: Detected): HelperFile[] {
   const content =
     d.strategy === 'svelte-preprocess' ? SVELTE_HELPER_CONTENT : d.strategy === 'babel-plugin-rn' ? RN_HELPER_CONTENT : REACT_HELPER_CONTENT
   const files = [{ path: helper, content }]
+  if (d.strategy === 'vite-plugin') files.push({ path: VITE_HELPER, content: VITE_HELPER_CONTENT })
   if (d.framework === 'next') {
     files.push({ path: NEXT_LOADER, content: NEXT_LOADER_CONTENT }, { path: NEXT_ADAPTER, content: NEXT_ADAPTER_CONTENT },
       { path: MDX_HELPER, content: MDX_HELPER_CONTENT })
@@ -193,8 +200,26 @@ export function helperFiles(d: Detected): HelperFile[] {
   return files
 }
 
+/**
+ * A chat runs in its own worktree, where the live `.trezi/` helpers are not tracked
+ * and the agent may not write them (LKM-153). Trezi copies them in before the setup
+ * turn and checks every hash, so a missing helper is Trezi's reported failure, not
+ * the agent's dead end. The dev server keeps reading the live copies.
+ */
+async function provideHelpers(root: string, chat: string, helpers: Array<{ path: string; sha256: string }>): Promise<string | null> {
+  const checkout = await syncChatHelpers(chat, root)
+  if (!checkout) return null
+  for (const helper of helpers) {
+    const data = await readFile(join(checkout, helper.path)).catch(() => null)
+    if (!data || createHash('sha256').update(data).digest('hex') !== helper.sha256) {
+      throw new Error(`Trezi could not copy ${helper.path} into the chat workspace (${checkout}).`)
+    }
+  }
+  return checkout
+}
+
 /** Detect (JS helper), then have the workflow owner write the missing helpers. */
-async function scaffold(root: string): Promise<SetupResult> {
+export async function scaffold(root: string, chat?: string): Promise<SetupResult> {
   try {
     const d = await detect(root)
     // Nothing to write for vue (use its inspector) or an unknown framework.
@@ -202,9 +227,12 @@ async function scaffold(root: string): Promise<SetupResult> {
     if (!files.length) return { ok: true, framework: d.framework, strategy: d.strategy, files: [], written: false }
     const write = await workflowOwner().writeHelpers(root, files)
     if (!write.ok) return { ok: false, error: write.error }
+    const checkout = chat && write.helpers ? await provideHelpers(root, chat, write.helpers) : null
     return {
       ok: true,
       next: d.next,
+      ...(d.vite ? { vite: d.vite } : {}),
+      ...(checkout ? { checkout } : {}),
       helpers: write.helpers,
       framework: d.framework,
       strategy: d.strategy,
@@ -225,6 +253,7 @@ export function registerSetupIpc(): void {
     const d = await detect(root)
     return { framework: d.framework, canInstrument: d.framework !== 'unknown' }
   })
-  ipcMain.handle('setup:scaffold', (_e, root: string) => scaffold(root))
+  ipcMain.handle('setup:scaffold', (_e, root: string, chat?: unknown) =>
+    scaffold(root, typeof chat === 'string' && chat ? chat : undefined))
   ipcMain.handle('setup:uninstall', (_e, root: string) => workflowOwner().removeHelpers(root))
 }

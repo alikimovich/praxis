@@ -1,4 +1,4 @@
-import type { Framework, PreviewKind } from './api'
+import type { Framework, PreviewKind, SourceSetupState } from './api'
 import type { ChatAgentSettings } from './chat-settings'
 type Viewport = 'desktop' | 'mobile'
 
@@ -54,5 +54,7 @@ export interface ProjectEntry {
   /** Model/backend choices for each live chat. Missing entries are legacy
    * workspace data and safely use the defaults. */
   chatSettings?: Record<string, ChatAgentSettings>
+  /** Connect to Trezi outcome (LKM-153): stamps seen, "Not now", or the failure. */
+  sourceSetup?: SourceSetupState
 }
 

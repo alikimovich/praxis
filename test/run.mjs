@@ -91,6 +91,8 @@ const UNIT = [
   "jev-pilot",
   "test-runner",
   "setup-stamps",
+  "setup-vite",
+  "setup-vite-real",
   "code-reveal",
   "conversation-handoff",
   "pr-body",
@@ -173,7 +175,7 @@ const TIERS = { unit: UNIT, native: NATIVE, live: LIVE };
 // swiftc-heavy unit tests or the default 120 s budget is eaten by parallel compiles.
 // keychain-rebuild compiles the Keychain helper three times (LKM-144).
 const UNIT_EXCLUSIVE = new Set(['service-process', 'keychain-rebuild']);
-const UNIT_TIMEOUT_MS = { 'service-process': 240_000, 'keychain-rebuild': 300_000 };
+const UNIT_TIMEOUT_MS = { 'service-process': 240_000, 'keychain-rebuild': 300_000, 'setup-vite-real': 300_000 };
 const selected = new Set();
 const options = { jobs: Math.min(4, availableParallelism()),
   'timeout-ms': 120_000, 'log-tail': 0, filter: null };

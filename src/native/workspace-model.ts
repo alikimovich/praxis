@@ -49,7 +49,10 @@ export const METADATA_FIELDS: Record<string, (value: unknown) => boolean> = {
   dependenciesPending: value => typeof value === 'boolean',
   sessionKeys: value => Array.isArray(value) && value.length >= 1 && value.length <= MAX_SESSIONS && value.every(key => text(key, MAX_TEXT)),
   activeSessionKey: value => text(value, MAX_TEXT),
-  chatSettings: value => isObject(value)
+  chatSettings: value => isObject(value),
+  sourceSetup: value => isObject(value) && ['done', 'declined', 'failed'].includes(value.state) &&
+    Number.isSafeInteger(value.at) && value.at >= 0 && (value.reason === undefined || text(value.reason, MAX_TEXT)) &&
+    Object.keys(value).every(name => ['state', 'reason', 'at'].includes(name))
 }
 
 export const projectName = (root: string) => root.split('/').filter(Boolean).at(-1) ?? root

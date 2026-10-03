@@ -8,7 +8,8 @@ export interface NativeChatContext {
   root: string | null
   selection: { label: string; prompt: string; bubble: NonNullable<NativeChatMessage['selection']> } | null
   turn: AgentTurnOptions
-  setup: { needed: boolean; dismissed: boolean; status: string | null }
+  /** `failed`: the last Set up failed; `status` holds its reason and the card offers a retry. */
+  setup: { needed: boolean; dismissed: boolean; status: string | null; failed?: boolean }
   tokens: { needed: boolean; dismissed: boolean }
   notes: { id: string; text: string }[]
   spawns: { id: string; label: string; status: string; activity?: string }[]

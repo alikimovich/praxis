@@ -190,9 +190,16 @@ try {
     assert.equal([x, y].find(r => r.reply.result.kind === 'failed').reply.result.payload.code, 'conflict')
     const after = [x, y].find(r => r.reply.result.kind === 'succeeded').snapshot
 
+    // LKM-153: the project's Connect to Trezi outcome is a field the service validates.
+    const sourceSetup = { state: 'failed', reason: 'the dev server reported: @babel/core is not installed', at: 1759400000000 }
+    const remembered = await ws.op('update', { projects: [{ key: alpha, fields: { sourceSetup } }] }, after.revision)
+    assert.deepEqual(remembered.snapshot.projects.find(p => p.key === alpha).sourceSetup, sourceSetup)
     const before = readFileSync(file(dir))
-    const good = after.revision
+    const good = remembered.snapshot.revision
+    const setupField = value => ws.frame('update', { projects: [{ key: alpha, fields: { sourceSetup: value } }] }, good)
     for (const bad of [
+      setupField('declined'), setupField({ state: 'pending', at: 1 }), setupField({ state: 'done' }), setupField({ state: 'done', at: -1 }),
+      setupField({ state: 'done', at: 1.5 }), setupField({ state: 'failed', reason: 3, at: 1 }), setupField({ state: 'done', at: 1, extra: true }),
       ws.frame('open', { root: 'relative' }, good), ws.frame('open', { root: '/a\ud800' }, good), ws.frame('open', { root: '/a', extra: 1 }, good),
       ws.frame('open', { root: '/a', chatSettings: [] }, good), ws.frame('open', { root: '/a' }),
       ws.frame('select', {}, good), ws.frame('reorder', { key: alpha }, good), ws.frame('recent', { root: '/r', name: 1 }, good),

@@ -62,7 +62,7 @@ enum EditingProject {
     // MARK: Setup helpers
 
     static let helpers = ["trezi-source.cjs", "trezi-rn-source.cjs", "trezi-svelte-stamp.mjs",
-                          "trezi-next-loader.cjs", "trezi-next.cjs", "trezi-mdx.mjs"]
+                          "trezi-next-loader.cjs", "trezi-next.cjs", "trezi-mdx.mjs", "trezi-vite.mjs"]
 
     /// Copies the executable helpers setup keeps in the live project's `.trezi/` (and the
     /// pre-rename `.praxis/` names) into the worktree, verified byte for byte, and records
