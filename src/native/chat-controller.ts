@@ -6,7 +6,8 @@ import type { NativeChatCommand, NativeChatEffect, NativeChatLayout, NativeChatS
 import type { NativeComposerAction } from '../shared/native-composer'
 import { defaultChoiceFor, providerOptions, resolveSelection } from '../shared/provider-choices'
 import { parseSlashToken } from '../shared/slash-token'
-import { append, assistant, begin, finish, hydrate, late, mirror, newChat, reduce, type Chat, type Submission } from './chat-state'
+import { append, assistant, begin, finish, hydrate, late, mirror, newChat, reduce, STOPPED_GROUP, type Chat, type Submission } from './chat-state'
+import { DevErrorReader, touchedFile } from '../shared/dev-error'
 import { matches, permissionModes, snapshot } from './chat-snapshot'
 import { cardAction } from './chat-actions'
 
@@ -28,6 +29,7 @@ export class NativeChatController {
   private mirrors = new Map<string, string>()
   readonly closed = new Set<string>()
   private loading = new Map<string, { chat: Chat; promise: Promise<void> }>()
+  private devErrors = new Map<string, DevErrorReader>()
   constructor(readonly services: ChatServices) {}
   get(key: string) {
     let chat = this.chats.get(key)
@@ -69,6 +71,9 @@ export class NativeChatController {
         hydrate(chat, live.record.transcript)
         chat.title = migrateChatTitle(live.record.title)
         chat.isolation = live.isolation?.state ?? 'live'
+        chat.stopped = live.isolation?.reason === 'interrupted' ? 'held' : undefined
+        const stoppedMessage = chat.stopped && [...chat.messages].reverse().find(m => m.role === 'assistant')
+        if (stoppedMessage) stoppedMessage.revertGroup = `${STOPPED_GROUP}${chat.chat}`
       }
       if (live.record.id) this.services.restoreIslands?.(chat.chat, chat.root, live.record.id)
       chat.ready = true
@@ -225,6 +230,9 @@ export class NativeChatController {
     chat.sending = true; chat.isRunning = true; chat.turnStartedAt = Date.now(); chat.streamingId = null
     chat.turn = submission.id
     chat.last = submission; chat.login = undefined
+    // A new turn settles a reverted stopped turn for good and supersedes a preview error.
+    if (chat.stopped === 'reverted') chat.stopped = undefined
+    chat.previewError = undefined
     const cancellation = chat.cancellation
     const { text, attachments, selection, turn } = submission
     chat.messages.push({ id: crypto.randomUUID(), role: 'user', at: Date.now(), text, statuses: [], segments: text ? [{ kind: 'text', text }] : [],
@@ -246,7 +254,8 @@ export class NativeChatController {
     } finally { chat.sending = false; this.changed(chat); void this.drain(chat) }
   }
   async drain(chat: Chat) {
-    if (this.chats.get(chat.chat) !== chat || chat.isRunning || chat.sending || chat.paused || chat.isolation === 'parked') return
+    // A stopped turn's hold is no conflict: the next message continues on top of it.
+    if (this.chats.get(chat.chat) !== chat || chat.isRunning || chat.sending || chat.paused || (chat.isolation === 'parked' && chat.stopped !== 'held')) return
     const next = chat.queue.shift()
     if (next) await this.run(chat, next)
   }
@@ -287,6 +296,28 @@ export class NativeChatController {
       if (!result.ok) throw new Error(result.error ?? 'Unable to start the selected model.')
       chat.settings = settings; this.settingsChanged(chat)
     } finally { chat.switching = false }
+  }
+  /** LKM-151: a dev-server log line. A compile/parse error in a file the chat's last
+   *  landed turn touched shows that chat's preview-error card; a rebuild clears it. */
+  devServerLog(root: string, output: string) {
+    let reader = this.devErrors.get(root)
+    if (!reader) { reader = new DevErrorReader(); this.devErrors.set(root, reader) }
+    for (const line of output.split('\n')) {
+      const result = reader.read(line)
+      if (!result) continue
+      for (const chat of this.chats.values()) {
+        if (chat.root !== root) continue
+        if ('recovered' in result) {
+          const same = !result.recovered || !chat.previewError || touchedFile({ file: result.recovered, message: '' }, root, [chat.previewError.file])
+          if (chat.previewError && same) { chat.previewError = undefined; this.changed(chat) }
+          continue
+        }
+        const file = chat.landed ? touchedFile(result, root, chat.landed.files) : null
+        if (!file || (chat.previewError?.file === file && chat.previewError.message === result.message)) continue
+        chat.previewError = { file, message: result.message }
+        this.changed(chat)
+      }
+    }
   }
   settingsChanged(chat: Chat) { this.services.effect({ type: 'settings', chat: chat.chat, root: chat.root, settings: chat.settings }) }
   async action(action: NativeChatAction) {

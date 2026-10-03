@@ -16,14 +16,19 @@ struct QueuedComposerMessage: Decodable, Identifiable {
 struct ComposerQueue: View {
     let messages: [QueuedComposerMessage]
     let paused: Bool
+    /// Why the paused queue will not send on its own (LKM-151), and whether it can be sent now.
+    var note = ""
+    var canSend = true
     let action: (String, String?) -> Void
     var body: some View {
         VStack(spacing: 0) {
             if paused {
                 HStack {
-                    Text("Queue paused").foregroundStyle(.secondary)
+                    Text(note.isEmpty ? "Paused — these won't send until you choose" : note)
+                        .foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                     Spacer()
-                    Button("Resume") { action("queue-resume", nil) }.buttonStyle(.plain)
+                    Button("Send now") { action("queue-resume", nil) }.buttonStyle(.plain).disabled(!canSend)
+                        .help(canSend ? "Send the queued messages now" : note)
                 }.font(.system(size: 11)).padding(.horizontal, 12).frame(height: 28)
             }
             ScrollView {
@@ -79,12 +84,12 @@ final class ComposerQueueHost: NSHostingView<AnyView> {
     init() { super.init(rootView: AnyView(EmptyView())); sizingOptions = []; isHidden = true }
     required init(rootView: AnyView) { fatalError("init(rootView:) has not been implemented") }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    func update(_ entries: [[String: Any]], paused: Bool) {
-        let data = (try? JSONSerialization.data(withJSONObject: ["entries": entries, "paused": paused], options: [.sortedKeys])) ?? Data()
+    func update(_ entries: [[String: Any]], paused: Bool, note: String = "", canSend: Bool = true) {
+        let data = (try? JSONSerialization.data(withJSONObject: ["entries": entries, "paused": paused, "note": note, "canSend": canSend], options: [.sortedKeys])) ?? Data()
         guard data != signature else { return }
         signature = data
         let items = (try? JSONSerialization.data(withJSONObject: entries)).flatMap { try? JSONDecoder().decode([QueuedComposerMessage].self, from: $0) } ?? []
         count = items.count; isHidden = items.isEmpty
-        rootView = items.isEmpty ? AnyView(EmptyView()) : AnyView(ComposerQueue(messages: items, paused: paused) { [weak self] name, id in self?.action?(name, id) })
+        rootView = items.isEmpty ? AnyView(EmptyView()) : AnyView(ComposerQueue(messages: items, paused: paused, note: note, canSend: canSend) { [weak self] name, id in self?.action?(name, id) })
     }
 }

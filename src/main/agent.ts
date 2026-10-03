@@ -45,6 +45,7 @@ import {
   releaseChat,
   resolveParkedChat
 } from './chat-isolation'
+import { keepStoppedTurn, revertStoppedTurn, undoStoppedRevert } from './stopped-turn'
 import { cleanUpWorkspacesNow, initChatWorkspaces, legacyWorkspaceDirs, workspaceUsage } from './chat-workspaces'
 import { clearHistory, recordEdit } from './edit-history'
 import { isRepoRoot } from './git'
@@ -1228,7 +1229,9 @@ export function registerAgentIpc(
       await beforeTurn(key, text)
       if (preparation.cancelled) throw new Error('Message cancelled before sending.')
       if (sessions.get(key) !== session) throw new Error('This chat is closed.')
-      if (requestedKey && isolationSnapshot(requestedKey)?.state === 'parked') {
+      // A stopped turn's hold is not a conflict: the next turn continues on top of it.
+      const parked = requestedKey ? isolationSnapshot(requestedKey) : undefined
+      if (parked?.state === 'parked' && parked.reason !== 'interrupted') {
         throw new Error('Resolve this chat’s conflicting changes before sending queued messages.')
       }
       const entry = { role: 'user' as const, text: note, at: Date.now() }
@@ -1441,6 +1444,15 @@ export function registerAgentIpc(
     if (!sessionKey) return { ok: false }
     return discardParkedChat(sessionKey)
   })
+
+  // LKM-151 post-Stop card: revert (undoable), undo that revert, or keep the stopped
+  // turn's held work. "Ask agent to finish" is an ordinary turn from the renderer.
+  ipcMain.handle('agent:revert-stopped', async (_e, sessionKey = activeKey) =>
+    sessionKey ? revertStoppedTurn(sessionKey) : { ok: false, files: [] })
+  ipcMain.handle('agent:undo-revert-stopped', async (_e, sessionKey = activeKey) =>
+    sessionKey ? undoStoppedRevert(sessionKey) : { ok: false, files: [] })
+  ipcMain.handle('agent:keep-stopped', async (_e, sessionKey = activeKey) =>
+    sessionKey ? keepStoppedTurn(sessionKey) : { ok: false, files: [] })
 
   // PR: push the spawn's branch + open a PR from it (no checkout — the work is already
   // committed on the branch). Persists prUrl back onto the history record.

@@ -58,6 +58,7 @@ const UNIT = [
   "native-settings-layout",
   "native-settings-evidence",
   "native-chat-controller",
+  "stop-recovery-ui",
   "network-volume-note",
   "native-composer-layout",
   "native-chat-latest-settle",

@@ -36,6 +36,7 @@ import {
   LOGIN_COMMAND_MESSAGE,
   resolveClaudeCli
 } from './claude-login'
+import { liveCheckoutEdit } from '../live-write-guard'
 import { treziRules } from '../rules'
 import { elevationScale, layeredShadow } from '../shadows'
 import { SKILL_PACKS } from '../skill-packs'
@@ -1102,6 +1103,19 @@ async function startSession(
       // v9 resume: reload a past conversation's context (the record's captured
       // sdkSessionId) instead of starting fresh. Absent for the default open/new-chat path.
       ...(ctx?.resumeSessionId ? { resume: ctx.resumeSessionId } : {}),
+      // LKM-151: a worktree chat never edits the live checkout by absolute path, in any
+      // permission mode (hooks run before bypass/auto approvals; canUseTool does not).
+      hooks: {
+        PreToolUse: [{
+          hooks: [async input => {
+            const pre = input as { tool_name?: string; tool_input?: unknown }
+            const denied = liveCheckoutEdit(pre.tool_name ?? '', pre.tool_input, root, ctx?.liveRoot ?? root)
+            return denied
+              ? { hookSpecificOutput: { hookEventName: 'PreToolUse' as const, permissionDecision: 'deny' as const, permissionDecisionReason: denied.reason } }
+              : { continue: true }
+          }]
+        }]
+      },
       canUseTool: async (toolName, toolInput, opts) => {
         // The provider owner decides (S10); the adapter only settles the SDK callback.
         // An owner that cannot answer fails closed.

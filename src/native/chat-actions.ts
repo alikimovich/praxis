@@ -3,10 +3,12 @@ import { setupPrompt } from '../shared/setup-prompt'
 import { assistant, begin, type Chat } from './chat-state'
 import type { NativeChatController } from './chat-controller'
 import { loginAction } from './chat-login'
+import { recoveryAction } from './chat-recovery'
 
 /** Card actions call application services directly; shell effects only refresh web panels. */
 export async function cardAction(controller: NativeChatController, chat: Chat, action: NativeChatAction) {
   const { invoke, effect } = controller.services
+  if (await recoveryAction(controller, chat, action.action, action.id)) return
   switch (action.action) {
     case 'error-dismiss': chat.error = undefined; break
     case 'login-dismiss':
@@ -39,6 +41,7 @@ export async function cardAction(controller: NativeChatController, chat: Chat, a
       if (!message?.revertGroup) return
       const result = await invoke('edit:revert', chat.root, message.revertGroup)
       if (!result.ok) throw new Error('Unable to revert edits because files have changed since this turn.')
+      if (chat.landed?.group === message.revertGroup) { chat.landed = undefined; chat.previewError = undefined }
       message.revertGroup = undefined
       break
     }

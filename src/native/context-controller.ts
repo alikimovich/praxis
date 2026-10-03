@@ -63,7 +63,7 @@ export class NativeContextController {
     const group = element ? element.selectionGroup ?? [element] : []
     this.project(root).selection = element && group.length ? {
       label: group.length > 1 ? `${group.length} objects` : element.tag,
-      prompt: group.map(describeSelectionForPrompt).join('\n'),
+      prompt: group.map(item => describeSelectionForPrompt(item, root)).join('\n'),
       bubble: group.length > 1 ? { tag: `${group.length} objects`, ident: '', source: null } : selectionForBubble(element)
     } : null
     this.changed(root)

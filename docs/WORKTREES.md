@@ -37,6 +37,12 @@ parked
        labelled "(deleted)"; only an unreadable patch is an error — LKM-130)
   → Discard: reset worktree, detach, delete chat branch
   → successful resolution: land once, detach, delete chat branch
+
+parked, reason interrupted (Stop or a failed turn; not a conflict — LKM-151)
+  → Revert this turn's changes: hidden at once (live never changed); Undo re-holds it;
+      the next turn start or chat close discards it (recovery ref kept)
+  → Keep changes: land the held work as one turn with its own Revert group
+  → Ask agent to finish / next message / Send now: continue on top of it; success lands all
 ```
 
 The branch is a recovery reference, not the session's permanent identity. It exists
@@ -98,6 +104,36 @@ invokes the same queued resolver as the conflict card, leaving marker-bearing fi
 the chat's current worktree for the model to reconcile. The tool is idempotent after
 staging, refuses to reset a worktree already edited in the current turn, and exposes no
 raw Git/reset/discard escape hatch.
+
+## Stopped turns and broken previews (LKM-151)
+
+Stop never leaves a half-made edit in the live checkout. An interrupted or failed turn
+parks with `reason: 'interrupted'` (`src/main/stopped-turn.ts`), so the chat shows a
+post-Stop card instead of the conflict card. The card offers Revert this turn's changes,
+Keep changes, and Ask agent to finish. Revert is byte-exact because the held work never
+touched the live checkout. It is undoable until the next turn starts. The stopped
+message's hover Revert does the same thing. Keep lands the work like a successful turn:
+one commit, plus an edit-history group that the message's Revert and "Revert last turn"
+restore byte for byte. A drift park stays a conflict even when a later turn on top of
+it is stopped. The chat can still send while held: the next message continues the held
+work.
+
+The original incident landed live because the selection prompt carried the
+element's absolute live path. A bypass-permission background agent edited that path
+directly. The prompt now gives project-relative sources. A Claude `PreToolUse` hook
+(`src/main/live-write-guard.ts`) denies Edit/Write/MultiEdit/NotebookEdit aimed inside
+the live checkout from a worktree chat, and names the worktree path to use instead.
+Shell commands and other providers are not covered by the hook.
+
+`src/shared/dev-error.ts` reads the dev server's log lines and spots Vite
+(esbuild/Babel/Rolldown `PARSE_ERROR`), Next.js and tsc-style errors. If the error
+names a file that the chat's last landed turn touched, a card in Trezi's own chat UI
+offers Revert last turn and Fix with agent. The card clears when the dev server
+rebuilds that file. Detection is a heuristic over log output; errors that appear only
+in the browser are not read.
+
+Regression coverage: `test/stop-recovery.mjs` (Git, through the Swift owners) and
+`test/stop-recovery-ui.mjs` (guard, reader, controller cards and queue).
 
 ## Recovery and limits
 
@@ -268,8 +304,9 @@ selected objects for that chat. Each chat drains in FIFO order, including while
 another chat is active. Sends carry an explicit session key; attachment saving
 and the previous turn's landing cannot redirect them to a newly active project.
 The next send waits for the existing landing chain. A conflict pauses dispatch;
-Stop and agent errors pause remaining messages until Resume queue. Pending items
-can be removed. Queues are in memory, cleared on chat close or app reload.
+Stop and agent errors pause remaining messages until Send now. The paused row says
+whether they will send: after Stop, "not sent" (Send now continues the held work), and
+during a conflict, waiting with Send now disabled. Pending items can be removed. Queues are in memory, cleared on chat close or app reload.
 
 Provider completion keeps the chat busy until landing finishes. Automatic
 reconciliation shows a short progress status instead of the conflict card.
