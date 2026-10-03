@@ -5,7 +5,7 @@ import { installNativeInspector } from './inspector-runtime'
 import { NativePreviewRecovery } from './preview-recovery'
 import { NativePreviewSupervisor } from './preview-supervisor'
 import { NativeLegacyNames } from './legacy-names'
-import { NativeRecoveryRefs, recoveryNotices } from './repository-recovery'
+import { NativeRecoveryRefs } from './repository-recovery'
 import { NativeLayersController } from './layers-controller'
 import { agentOptionsFor } from '../shared/chat-settings'
 import { NativeEditorController } from './editor-controller'
@@ -65,7 +65,8 @@ import { NativeGitController } from './git-controller'
 import { environmentChanges } from '../shared/environment-changes'
 import { NativeContextController } from './context-controller'
 import { NativeReviewController } from './review-controller'
-import { NativeActivityController } from './activity-controller'
+import { ACTIVITY_AUTO_OPEN_KEY, activityAutoOpen, NativeActivityController } from './activity-controller'
+import { reportConversationRecovery, reportRepositoryRecovery, reportSourceRecovery } from './activity-startup'
 import { displayText, setDisplayProfile } from './display-paths'
 import { NativeSettingsController } from './settings-controller'
 import { withClaudePane } from './settings-claude'
@@ -278,30 +279,15 @@ async function main() {
 
   let shellController: NativeShellController | undefined
   const renderShell = () => shellController?.render()
-  const activityController = new NativeActivityController((method, data) => host!.send(method, data), text => displayText(text))
+  // LKM-152: the window opens by itself only as Settings → Show Activity automatically allows.
+  const activityController = new NativeActivityController((method, data) => host!.send(method, data), text => displayText(text), () => activityAutoOpen(preferences.get(ACTIVITY_AUTO_OPEN_KEY)))
   host.on('activity-action', ({ action }) => activityController.action(action))
-  host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle') })
+  host.on('menu', ({ action }) => { if (action === 'logs') activityController.action('toggle'); else if (action === 'activity') activityController.action('show') })
   serviceEvents.on('event', (channel, line) => { if (channel === 'devserver:log' || channel === 'simulator:log') activityController.append(line, 'server') })
-  // Work a previous service could not finish stays at its recovery refs; nothing is
-  // replayed or reset. The service closes each interrupted entry at the launch that
-  // finds it, so this reports it once (LKM-134), not as an error: nothing was lost.
-  void repository.status().then(status => {
-    for (const notice of recoveryNotices(status)) activityController.append(notice.text, notice.kind)
-  }, () => {})
-  // A chat a crash cut off was saved from its checkpoint at launch (never over a newer
-  // record, which is kept, with the checkpoint copied beside it).
-  void conversation.status().then(({ recovered }) => {
-    for (const entry of recovered) activityController.append(entry.outcome === 'damaged'
-      ? `A damaged chat checkpoint was moved aside${entry.copy ? ` to ${entry.copy}` : ''}.`
-      : `A chat was cut off${entry.interrupted ? ' mid-turn' : ''} when Trezi last stopped; ${entry.outcome === 'restored' ? 'its conversation was restored' : `a newer copy was kept and the checkpoint saved to ${entry.copy}`}.`, 'error')
-  }, () => {})
-  // A transaction a crash cut short was rolled back at launch where its own bytes were
-  // still there; a file changed since was kept, with the pre-image beside the report.
-  void source.status().then(({ interrupted, journal }) => {
-    if (journal) activityController.append(`Source journal: ${journal}`, 'error')
-    for (const entry of interrupted) activityController.append(
-      `An earlier source ${entry.kind} in ${entry.root} was interrupted and rolled back${entry.kept.length ? `; ${entry.kept.length} file(s) changed since were kept, with their previous content under ${entry.copies[0]?.replace(/\/files\/[^/]+$/, '')}` : ''}.`, 'error')
-  }, () => {})
+  // Startup recovery reports are gray notices that never open the window (`activity-startup.ts`).
+  void repository.status().then(status => reportRepositoryRecovery(activityController, status), () => {})
+  void conversation.status().then(({ recovered }) => reportConversationRecovery(activityController, recovered), () => {})
+  void source.status().then(status => reportSourceRecovery(activityController, status), () => {})
   const reportPreferences = (error: unknown) => activityController.append(`Could not save a preference: ${error instanceof Error ? error.message : String(error)}`, 'error')
   host.on('native-layout-width', ({ width }) => {
     if (!Number.isFinite(width) || width < 320 || width > 760) return
@@ -315,6 +301,8 @@ async function main() {
   // LKM-151: a compile/parse error in a file the last turn touched gets Trezi's own recovery card.
   runtimeOwner.onLog((root, line) => chatController.devServerLog(root, line))
   const workspaceController = installNativeWorkspace(host!, mainView, workspace, chatController, preferences)
+  // A failed open has no automatic recovery: only Retry or a fix by the user (LKM-152).
+  workspaceController.openFailed = (name, message) => activityController.append(`Could not open ${name}: ${message}`, 'needs-action', { event: 'project-open-failed' })
   const contextController = new NativeContextController(workspaceController, chatController, () => ({ projectUi: preferences.get('trezi:project-ui:v1') === 'true', projectUiEngine: preferences.get('trezi:project-ui-engine:v1') === 'jev' ? 'jev' : 'agent' }), (channel, ...args) => dispatchIPC('main', { type: 'send', channel, args }))
   const visualEdit = async (root: string, prompt: string) => {
     const entry = workspaceController.state.projects.find(p => p.root === root)
@@ -451,7 +439,8 @@ async function main() {
   }
   host.on('menu', ({ action }) => { if (['new-project', 'settings', 'feedback', 'diagnose'].includes(action)) openSheet(action) })
   host.on('shell-action', action => { if (action.action === 'rename-chat' && action.id && workspaceController.state.activeKey) sheetController.renameChat(action.id, workspaceController.state.activeKey); if (action.action === 'select' && action.id?.startsWith('history:')) openSheet('review', action.id.slice(8)); if (action.action === 'memory') openSheet('memory', action.project ?? workspaceController.state.activeKey ?? undefined) })
-  const previewSupervisor = new NativePreviewSupervisor(workspaceController)
+  // After the last automatic restart the crash loop needs the user.
+  const previewSupervisor = new NativePreviewSupervisor(workspaceController, undefined, reason => activityController.append(`The dev server kept stopping and Trezi gave up restarting it: ${reason}`, 'needs-action', { event: 'devserver-crash-loop' }))
   serviceEvents.on('event', (channel, value) => {
     if (channel !== 'devserver:exit') return
     activityController.append(value.reason, 'error')
@@ -514,7 +503,7 @@ async function main() {
   // a folder dropped on the Dock icon): opened once the workspace is attached.
   let attached = false
   const openRequests: string[] = []
-  const openRequested = (root: string) => workspaceController.command({ type: 'open', root }).catch(error => activityController.append(String(error), 'error'))
+  const openRequested = (root: string) => workspaceController.command({ type: 'open', root }).catch(error => activityController.append(`Could not open ${root}: ${String(error)}`, 'needs-action', { event: 'project-open-failed' }))
   host.on('open-project', ({ root }) => {
     if (typeof root !== 'string' || !isAbsolute(root) || testing) return
     if (attached) void openRequested(root); else openRequests.push(root)

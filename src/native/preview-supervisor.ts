@@ -38,7 +38,8 @@ export class NativePreviewSupervisor {
   /** Bumped by `reset`: a restart already under way no longer schedules the next. */
   private epoch = 0
 
-  constructor(private readonly workspace: SupervisedWorkspace, private readonly clock: SupervisorClock = realClock) {}
+  /** `gaveUp` hears the crash loop the user has to resolve (LKM-152: it may open Activity). */
+  constructor(private readonly workspace: SupervisedWorkspace, private readonly clock: SupervisorClock = realClock, private readonly gaveUp: (reason: string) => void = () => {}) {}
 
   exited({ root, url, reason }: ServerExit) {
     const { state } = this.workspace, key = projectKey(root)
@@ -61,7 +62,7 @@ export class NativePreviewSupervisor {
       ? `${reason}\n\nTrezi restarted it ${RESTART_DELAYS.length} times without success. Use Restart to try again.`
       : `${reason}\n\nRestarting in ${delay / 1000} s…`
     this.show({ kind: 'error', message, restart: true })
-    if (delay === undefined) { this.attempts = 0; this.shown = null; return }
+    if (delay === undefined) { this.attempts = 0; this.shown = null; this.gaveUp(reason); return }
     this.attempts++
     this.timer = this.clock.set(() => { void this.restart(key) }, delay)
   }
