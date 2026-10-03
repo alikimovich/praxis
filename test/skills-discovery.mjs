@@ -48,7 +48,7 @@ assert.deepStrictEqual(parseSkillMeta('---\nname: bare\n---\n'), { name: 'bare' 
 
 // --- discoverProjectSkills --------------------------------------------------
 
-const root = mkdtempSync(join(tmpdir(), 'praxis-skills-'))
+const root = mkdtempSync(join(tmpdir(), 'trezi-skills-'))
 try {
   const skills = join(root, '.claude', 'skills')
   // Normal skill.
@@ -91,7 +91,7 @@ try {
   )
 
   // No .claude/skills dir → [] (never throws).
-  const empty = mkdtempSync(join(tmpdir(), 'praxis-noskills-'))
+  const empty = mkdtempSync(join(tmpdir(), 'trezi-noskills-'))
   try {
     assert.deepStrictEqual(await discoverProjectSkills(empty), [])
   } finally {

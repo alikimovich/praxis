@@ -1,10 +1,15 @@
+import { sourceStamp, sourceSelector } from './source-stamp'
+import { ANIMATION_REPLAY, ISLAND_OVERRIDE, ISLAND_OVERRIDE_REPLY } from '../shared/preview-channels'
+import { islandOverride } from './island-override'
+import './agent-console'
+import './agent-inspect'
 /**
  * Preview preload — injected into the previewed app's native WebContentsView.
  *
- * This is what makes praxis's differentiator possible: a click-to-select overlay
+ * This is what makes trezi's differentiator possible: a click-to-select overlay
  * laid over the *real running repo*. When "select mode" is on it highlights the
  * hovered element and, on click, captures that element's identity (tag, a
- * best-effort CSS selector, its `data-praxis-source` stamp if the repo opts in,
+ * best-effort CSS selector, its `data-trezi-source` stamp if the repo opts in,
  * and a few key computed styles) and ships it to the main process, which relays
  * it to the chat renderer.
  *
@@ -13,9 +18,11 @@
  * shadow root with `pointer-events:none` so it can never clash with or swallow
  * events from the previewed app.
  */
-import { ipcRenderer } from 'electron'
+import { ipcRenderer } from '../native/preview-transport'
+import { createThreeDInspector } from './three-d'
 import { createViewportReadout } from './viewport-readout'
 import type { SelectedElement } from '../shared/api'
+import { CONTROL_OVERLAY_SELECTOR } from '../shared/control-overlay'
 import { isScopeClass } from '../shared/display-classes'
 import { FRAME_DATA_URI, FRAME_INSET } from '../shared/iphone-frame'
 // Channels (preview ⇄ main). The strings live in shared/preview-channels.ts —
@@ -38,6 +45,7 @@ import {
   PREVIEW_READINESS as READINESS,
   PREVIEW_SET_COMMENT_MODE as SET_COMMENT_MODE,
   PREVIEW_SET_FRAME as SET_FRAME,
+  PREVIEW_HIDE_SCROLLBARS,
   PREVIEW_SET_MODE as SET_MODE,
   PREVIEW_SET_PINS as SET_PINS,
   PREVIEW_SET_STATUS as SET_STATUS,
@@ -61,14 +69,14 @@ import { specifiedValues, varRefName } from './style-provenance'
 
 type CommentMode = 'comment' | 'annotate' | null
 
-// The simulator preview loads praxis's own sim-bridge page (an MJPEG <img> of the
-// booted device), flagged with `?praxisSim=1`. There's no previewed-app DOM there
+// The simulator preview loads trezi's own sim-bridge page (an MJPEG <img> of the
+// booted device), flagged with `?treziSim=1`. There's no previewed-app DOM there
 // to highlight/stamp/inspect, so the entire web overlay below is skipped. The
 // query param (not a page global) is the signal because the preload runs in an
 // isolated world and can't see the page's `window`, but `location` is shared.
 // Phase 2/3 add the simulator-specific overlay separately.
 const IS_SIM_BRIDGE =
-  typeof location !== 'undefined' && /[?&]praxisSim=1\b/.test(location.search)
+  typeof location !== 'undefined' && /[?&]treziSim=1\b/.test(location.search)
 
 /** Computed styles worth surfacing in the inspector + Styles panel: the v1
  *  longhand set (curated, not the whole CSSOM). Longhands, not shorthands, so
@@ -148,7 +156,7 @@ function setStatusPill(text: string | null): void {
   }
   if (!statusEl) {
     const el = document.createElement('div')
-    el.setAttribute('data-praxis-status', '')
+    el.setAttribute('data-trezi-status', '')
     el.style.cssText =
       'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:2147483646;' +
       'max-width:82%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' +
@@ -184,7 +192,7 @@ let lastHovered: Element | null = null
 function ensureOverlay(): void {
   if (overlayHost) return
   const host = document.createElement('div')
-  host.setAttribute('data-praxis-overlay', '')
+  host.setAttribute('data-trezi-overlay', '')
   // Host itself never paints or intercepts; the shadow tree draws the box.
   host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647;'
   const shadow = host.attachShadow({ mode: 'open' })
@@ -206,7 +214,7 @@ function ensureOverlay(): void {
 
   // Alt/Option spacing measurements (rebuilt per hover — see drawMeasure).
   const meas = document.createElement('div')
-  meas.setAttribute('data-praxis-measure', '')
+  meas.setAttribute('data-trezi-measure', '')
   meas.style.cssText = 'position:fixed;inset:0;pointer-events:none;'
 
   // Whole-page mode hint chip (top-center) while C/Y is armed.
@@ -222,7 +230,7 @@ function ensureOverlay(): void {
   // an inline comment/annotate input (State B); enterInputState/collapseInput
   // morph between them in place.
   const toolbar = document.createElement('div')
-  toolbar.setAttribute('data-praxis-toolbar', '')
+  toolbar.setAttribute('data-trezi-toolbar', '')
   toolbar.style.cssText =
     'position:fixed;pointer-events:auto;display:none;box-sizing:border-box;align-items:center;gap:2px;' +
     'padding:4px;background:#1f1f1f;border:1px solid rgba(255,255,255,0.08);border-radius:10px;' +
@@ -232,9 +240,9 @@ function ensureOverlay(): void {
   // textarea's scrollbar) from a <style> scoped inside the shadow root.
   const style = document.createElement('style')
   style.textContent =
-    '[data-praxis-toolbar] textarea::placeholder{color:#8a8a8a}' +
-    '[data-praxis-toolbar] textarea{scrollbar-width:none}' +
-    '[data-praxis-toolbar] textarea::-webkit-scrollbar{display:none}' +
+    '[data-trezi-toolbar] textarea::placeholder{color:#8a8a8a}' +
+    '[data-trezi-toolbar] textarea{scrollbar-width:none}' +
+    '[data-trezi-toolbar] textarea::-webkit-scrollbar{display:none}' +
     // Squircle the injected overlay UI's rounded corners (toolbar pill, icon
     // buttons, badges) to match the app — matches styles.css's global rule.
     ':host *{corner-shape:squircle}'
@@ -251,6 +259,10 @@ function ensureOverlay(): void {
       title: 'Edit text in place',
       svg: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>'
     },
+    'three-d': {
+      title: 'Inspect in 3D',
+      svg: '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>'
+    },
     props: {
       title: 'Edit props',
       svg: '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>'
@@ -259,27 +271,23 @@ function ensureOverlay(): void {
       title: 'Comment on this element — runs a parallel agent',
       svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'
     },
-    annotate: {
-      title: 'Pin a note on this element, no agent',
-      svg: '<path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11l5-5V5a2 2 0 0 0-2-2Z"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/>'
-    },
     code: {
       title: 'Show the source in the editor',
       svg: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'
     },
     delete: {
-      title: 'Ask Praxis to delete this element',
+      title: 'Ask Trezi to delete this element',
       svg: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'
     }
   }
-  // 26×26 icon button. comment/annotate are leading mode-toggles (track a pressed
+  // 26×26 icon button. Comment is the leading mode toggle (tracks a pressed
   // bg via data-pressed); props/code/delete are trailing action icons.
   const makeIcon = (kind: keyof typeof ICONS): HTMLButtonElement => {
     const b = document.createElement('button')
     b.type = 'button'
     b.dataset.kind = kind
     b.title = ICONS[kind].title
-    b.setAttribute('aria-label', kind)
+    b.setAttribute('aria-label', kind === 'three-d' ? 'Inspect in 3D' : kind)
     b.style.cssText =
       'flex:0 0 auto;width:26px;height:26px;border:none;border-radius:7px;background:transparent;' +
       'display:flex;align-items:center;justify-content:center;cursor:default;color:#d4d4d4;'
@@ -299,7 +307,6 @@ function ensureOverlay(): void {
   }
 
   const commentBtn = makeIcon('comment')
-  const annotateBtn = makeIcon('annotate')
 
   // Inline input group (State B) — hidden in the icon row, faded/grown in on morph.
   const inputWrap = document.createElement('div')
@@ -338,15 +345,16 @@ function ensureOverlay(): void {
 
   const editBtn = makeIcon('edit')
   const propsBtn = makeIcon('props')
+  const threeDBtn = makeIcon('three-d')
   const codeBtn = makeIcon('code')
   const deleteBtn = makeIcon('delete')
 
-  // DOM order: comment, annotate, [input], edit, props, code | delete. The divider
+  // DOM order: comment, [input], edit, props, 3D, code | delete. The divider
   // sits before Delete only; the button[data-kind] order the tests assert stays
-  // comment, annotate, edit, props, code, delete (the separator has no data-kind).
+  // comment, edit, props, three-d, code, delete (the separator has no data-kind).
   // `edit` only renders for plain-text stamped leaves (setEditAction) — the
   // discoverable form of the double-click-to-edit gesture.
-  toolbar.append(commentBtn, annotateBtn, inputWrap, editBtn, propsBtn, codeBtn, separator, deleteBtn)
+  toolbar.append(commentBtn, inputWrap, editBtn, propsBtn, threeDBtn, codeBtn, separator, deleteBtn)
 
   shadow.append(sel, box, meas, label, pins, hint, toolbar, style)
   document.documentElement.appendChild(host)
@@ -368,6 +376,7 @@ function ensureOverlay(): void {
  *  inline comment/annotate input is open — those actions don't apply there. */
 function setTrailingActions(show: boolean): void {
   const disp = show ? 'flex' : 'none'
+  toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="three-d"]')?.style.setProperty('display', disp)
   toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="props"]')?.style.setProperty('display', disp)
   toolbarEl?.querySelector<HTMLButtonElement>('[data-kind="delete"]')?.style.setProperty('display', disp)
   if (separatorEl) separatorEl.style.display = show ? 'block' : 'none'
@@ -384,7 +393,7 @@ const NON_TEXT_TAGS = new Set([
 
 /**
  * True when an element can be edited in place: a directly-stamped element whose
- * only content is plain text (no child elements) — so its `data-praxis-source`
+ * only content is plain text (no child elements) — so its `data-trezi-source`
  * maps to exactly this element's text child. Matches the onDblClick guard so the
  * toolbar's Edit button and the double-click gesture agree on "when it's possible".
  */
@@ -392,7 +401,7 @@ function isTextEditable(el: Element): el is HTMLElement {
   return (
     el instanceof HTMLElement &&
     el.childElementCount === 0 &&
-    el.hasAttribute('data-praxis-source') &&
+    sourceStamp(el) !== null &&
     !NON_TEXT_TAGS.has(el.tagName.toLowerCase())
   )
 }
@@ -407,10 +416,13 @@ function setEditAction(): void {
 
 /**
  * Outline the picked element persistently. Stamped elements highlight every
- * sibling with the same data-praxis-source (the same component/loop instance
+ * sibling with the same data-trezi-source (the same component/loop instance
  * set), Figma-style; the badge on the pick reads "h3 × 4" then.
  */
-function setSelectionHighlight(el: Element | null): void {
+let pickedElements: Element[] = []
+
+function setSelectionHighlight(el: Element | null, group?: Element[]): void {
+  pickedElements = group ?? (el ? [el] : [])
   ensureOverlay()
   if (!selLayer) return
   selLayer.textContent = ''
@@ -418,11 +430,12 @@ function setSelectionHighlight(el: Element | null): void {
   if (!el) return
   const src = findSource(el)
   let els: Element[] = [el]
-  if (src) {
+  if (group) els = group
+  if (src && !group) {
     try {
       // The stamp may live on el itself or an ancestor; the stamped elements ARE
       // the component instances — outline those (all of them).
-      const same = Array.from(document.querySelectorAll(`[data-praxis-source="${CSS.escape(src)}"]`))
+      const same = Array.from(document.querySelectorAll(sourceSelector(src)))
       if (same.length) els = same
     } catch {
       /* malformed stamp for a selector — outline just the pick */
@@ -431,7 +444,7 @@ function setSelectionHighlight(el: Element | null): void {
   selEls = els
   for (let i = 0; i < els.length; i++) {
     const b = document.createElement('div')
-    b.setAttribute('data-praxis-selbox', '')
+    b.setAttribute('data-trezi-selbox', '')
     // Thinner than the 2px hover box — selected-but-not-hovered reads calmer.
     b.style.cssText =
       'position:fixed;pointer-events:none;box-sizing:border-box;display:none;' +
@@ -439,9 +452,9 @@ function setSelectionHighlight(el: Element | null): void {
     selLayer.appendChild(b)
   }
   const badge = makeChip()
-  badge.setAttribute('data-praxis-selbadge', '')
+  badge.setAttribute('data-trezi-selbadge', '')
   const tag = (els[0] ?? el).tagName.toLowerCase()
-  chipName(badge, els.length > 1 ? `${tag} × ${els.length}` : shortLabel(el))
+  chipName(badge, group && els.length > 1 ? `${els.length} objects` : els.length > 1 ? `${tag} × ${els.length}` : shortLabel(el))
   // Size comes from positionSelection — it holds the anchor's live rect, and
   // re-runs on every scroll/resize/mutation, so the numbers track the layout.
   selLayer.appendChild(badge)
@@ -521,7 +534,7 @@ const pinDots = new Map<string, { selector: string; dot: HTMLDivElement }>()
 function buildPins(): void {
   // Don't materialize the overlay host just to hold an empty pins layer. An idle
   // preview (no annotations, select/comment off) must leave the previewed app's
-  // DOM untouched — otherwise a stray, empty `data-praxis-overlay` div is injected
+  // DOM untouched — otherwise a stray, empty `data-trezi-overlay` div is injected
   // into every page on load, which shows up when inspecting the app.
   if (!annotationPins.length) {
     pinDots.clear()
@@ -576,9 +589,12 @@ function hideOverlay(): void {
   if (overlayLabel) overlayLabel.style.display = 'none'
 }
 
-/** True for our own overlay nodes — never select or highlight the highlighter. */
+/** Keep our overlay and project-owned tuning panels outside element selection. */
 function isOverlay(el: Element | null): boolean {
-  return !!el && !!overlayHost && (el === overlayHost || overlayHost.contains(el))
+  return !!el && (
+    !!el.closest(CONTROL_OVERLAY_SELECTOR) ||
+    (!!overlayHost && (el === overlayHost || overlayHost.contains(el)))
+  )
 }
 
 // The blue chip that names the element — both the hover label and the selection
@@ -594,7 +610,7 @@ function makeChip(): HTMLDivElement {
   chip.style.cssText = CHIP_CSS
   const name = document.createElement('span')
   const size = document.createElement('span')
-  size.setAttribute('data-praxis-size', '')
+  size.setAttribute('data-trezi-size', '')
   size.style.cssText = 'margin-left:6px;font-weight:500;opacity:0.72;'
   chip.append(name, size)
   return chip
@@ -694,7 +710,7 @@ function measureCap(x: number, y: number, axis: 'x' | 'y'): HTMLDivElement {
 
 function measureLabel(text: string, x: number, y: number): HTMLDivElement {
   const d = document.createElement('div')
-  d.setAttribute('data-praxis-measure-label', '')
+  d.setAttribute('data-trezi-measure-label', '')
   d.textContent = text
   d.style.cssText =
     `position:fixed;pointer-events:none;left:${x}px;top:${y}px;` +
@@ -789,14 +805,14 @@ function cssPath(el: Element): string {
 
 /**
  * The source stamp the opened repo opts into (see DESIGN.md): a
- * `data-praxis-source="path/to/File.tsx:line"` attribute. We walk up to the
+ * `data-trezi-source="path/to/File.tsx:line"` attribute. We walk up to the
  * nearest stamped ancestor so a click on a deep text node still resolves to the
  * component that owns it.
  */
 function findSource(el: Element): string | null {
   let node: Element | null = el
   while (node) {
-    const stamp = node.getAttribute('data-praxis-source')
+    const stamp = sourceStamp(node)
     if (stamp) return stamp
     node = node.parentElement
   }
@@ -804,15 +820,15 @@ function findSource(el: Element): string | null {
 }
 
 /**
- * The nearest COMPONENT-instance call site (v8 F3a): `data-praxis-component-source`,
+ * The nearest COMPONENT-instance call site (v8 F3a): `data-trezi-component-source`,
  * which the stamp plugin forwards through `{...props}` so the authored
- * `<Component …/>` wins over the innermost host's `data-praxis-source`. Walk up the
+ * `<Component …/>` wins over the innermost host's `data-trezi-source`. Walk up the
  * same way so a click on a deep child still resolves to its owning instance.
  */
 function findComponentSource(el: Element): string | null {
   let node: Element | null = el
   while (node) {
-    const stamp = node.getAttribute('data-praxis-component-source')
+    const stamp = sourceStamp(node, true)
     if (stamp) return stamp
     node = node.parentElement
   }
@@ -861,6 +877,7 @@ function isValidFingerprint(fp: unknown): fp is LayerFingerprint {
  */
 function layersSelect(path: number[], fingerprint: LayerFingerprint): void {
   if (editing || commenting) return
+  threeD.close()
   const el = resolveLayerElement(path, fingerprint)
   if (!el) return
   ipcRenderer.send(PICKED, describe(el))
@@ -948,16 +965,21 @@ let styleStashEl: HTMLElement | null = null
 
 /**
  * The element style ops target: the current selection, re-resolved through its
- * `data-praxis-source` stamp when HMR swapped the node out from under us.
+ * `data-trezi-source` stamp when HMR swapped the node out from under us.
  */
 function resolveStyleTarget(): HTMLElement | null {
+  if (threeD.active()) {
+    const target = threeD.selected()
+    selectedEl = target
+    return target instanceof HTMLElement ? target : null
+  }
   let el: Element | null = selectedEl
   if (el && !el.isConnected) {
     const src = findSource(el) // attributes survive on detached nodes
     el = null
     if (src) {
       try {
-        el = document.querySelector(`[data-praxis-source="${CSS.escape(src)}"]`)
+        el = document.querySelector(sourceSelector(src))
       } catch {
         el = null
       }
@@ -1136,6 +1158,7 @@ function replayStyle(prop: string, from: string, to: string): void {
 }
 
 function onMove(e: MouseEvent): void {
+  if (threeD.active()) return
   if (previewDrag?.active()) return
   // Self-heal: if the frozen node was swapped out (HMR) without a blur, clear it
   // so a mode isn't stranded anchored to a detached element.
@@ -1173,6 +1196,7 @@ function onMove(e: MouseEvent): void {
 }
 
 function onClick(e: MouseEvent): void {
+  if (threeD.active()) return
   if (editing) return
   // Only genuine user input acts — a hostile page can dispatch synthetic clicks
   // while a mode is armed; isTrusted is false for those.
@@ -1183,12 +1207,28 @@ function onClick(e: MouseEvent): void {
     // Swallow the click so the previewed app doesn't also act on it.
     e.preventDefault()
     e.stopPropagation()
-    ipcRenderer.send(PICKED, describe(el))
+    lastHovered = null
+    hideOverlay()
+    clearMeasure()
+    const group = e.shiftKey
+      ? pickedElements.includes(el)
+        ? pickedElements.filter((item) => item !== el && item.isConnected)
+        : [...pickedElements.filter((item) => item.isConnected), el]
+      : [el]
+    const target = group.at(-1)
+    if (!target) {
+      ipcRenderer.send(PICKED, { ...describe(el), selectionGroup: [] })
+      selectedEl = null
+      hideToolbar()
+      setSelectionHighlight(null)
+      return
+    }
+    ipcRenderer.send(PICKED, { ...describe(target), selectionGroup: group.map(describe) })
     // A fresh pick resets element-scoped surfaces: clear any open input from the
     // previous selection, then show the toolbar (State A) + persistent outlines.
     resetInput()
-    showToolbar(el)
-    setSelectionHighlight(el)
+    showToolbar(target)
+    setSelectionHighlight(target, e.shiftKey ? group : undefined)
   } else if (commentMode) {
     e.preventDefault()
     e.stopPropagation()
@@ -1204,6 +1244,7 @@ let editing: HTMLElement | null = null
 let editOriginal = ''
 
 function onDblClick(e: MouseEvent): void {
+  if (threeD.active()) return
   if (!active || editing || !e.isTrusted) return
   const el = e.target as HTMLElement | null
   // Only a directly-stamped element with plain text (no child elements) — so the
@@ -1247,7 +1288,7 @@ function commitEdit(): void {
   const el = endEdit()
   if (!el) return
   const text = el.textContent ?? ''
-  const source = el.getAttribute('data-praxis-source')
+  const source = sourceStamp(el)
   if (source && text.trim() !== editOriginal.trim()) {
     ipcRenderer.send(TEXT_EDIT, { source: source.slice(0, 256), text: text.slice(0, 2000) })
   }
@@ -1338,7 +1379,7 @@ function resetInput(): void {
   commenting = null
   inputKind = null
   inputFromMode = false
-  if (toolbarEl) toolbarEl.removeAttribute('data-praxis-composer')
+  if (toolbarEl) toolbarEl.removeAttribute('data-trezi-composer')
   if (inputEl) inputEl.value = ''
   if (inputWrapEl) {
     inputWrapEl.style.opacity = '0'
@@ -1361,7 +1402,7 @@ function enterInputState(kind: CommentMode, el: Element, fromMode: boolean): voi
   inputEl.value = ''
   inputEl.placeholder = kind === 'annotate' ? 'Add a note…' : 'Ask for changes…'
   submitEl.style.background = kind === 'annotate' ? '#f59e0b' : '#2563eb'
-  toolbarEl.setAttribute('data-praxis-composer', '')
+  toolbarEl.setAttribute('data-trezi-composer', '')
   setTrailingActions(false)
   paintToggles()
   animatePill(() => {
@@ -1398,6 +1439,12 @@ function onToolbarButton(kind: string): void {
     if (inputKind === kind) collapseInput()
     else if (inputKind) switchInputKind(kind)
     else enterInputState(kind, el, false)
+  } else if (kind === 'three-d') {
+    hideToolbar()
+    hideOverlay()
+    clearMeasure()
+    setSelectionHighlight(null)
+    threeD.open(el)
   } else if (kind === 'edit') {
     // Same in-place edit as double-click, but discoverable from the toolbar.
     if (isTextEditable(el)) startTextEdit(el)
@@ -1490,6 +1537,19 @@ function setCommentMode(next: CommentMode, fromRenderer = false): void {
 }
 
 function onKey(e: KeyboardEvent): void {
+  if (threeD.active()) return
+  // Stop page shortcuts at window capture, but retain the browser's editing
+  // defaults (caret movement, selection, typing, clipboard and IME).
+  if (blockPageInput(e)) {
+    if (inputEl && e.composedPath().includes(inputEl)) {
+      if (e.isTrusted) onInputKey(e)
+      return
+    }
+    if (editing) {
+      if (e.isTrusted) onEditKey(e)
+      return
+    }
+  }
   if (!e.isTrusted || editing) return
   if (commenting) return // the open composer owns keys (its handler manages them)
   if (e.key === 'Escape') {
@@ -1524,11 +1584,26 @@ function onKey(e: KeyboardEvent): void {
 /** Releasing Option (or losing the key entirely on window blur) ends the
  *  measurement — nothing else in the overlay is keyed to it. */
 function onKeyUp(e: KeyboardEvent): void {
+  blockPageInput(e)
   if (!altHeld) return
   if (e.key === 'Alt' || !e.altKey) {
     altHeld = false
     clearMeasure()
   }
+}
+
+/** Run after our gesture handlers, before the preview application's handlers. */
+function blockPageInput(e: Event): boolean {
+  if ((!active && !editing) || threeD.active()) return false
+  const target = e.target instanceof Element ? e.target : null
+  const overlayKey = target === overlayHost && e instanceof KeyboardEvent
+  if (isOverlay(target) && !overlayKey) return false
+  const inEditor = !!editing && !!target && editing.contains(target)
+  e.stopImmediatePropagation()
+  // Scrolling remains useful for inspecting a long page. Inside the inline
+  // editor only propagation is blocked, so native text editing still works.
+  if (!inEditor && !overlayKey && e.type !== 'wheel') e.preventDefault()
+  return true
 }
 
 function setActive(next: boolean): void {
@@ -1578,20 +1653,24 @@ function positionFrame(): void {
 
 let frameStyle: HTMLStyleElement | null = null
 
-function setFrame(on: boolean): void {
+function hideScrollbars(on: boolean): void {
   // Phones don't show persistent scrollbars — hide them inside the bezel (the
   // desktop-style bar drew right over the frame's edge otherwise).
   if (on && !frameStyle) {
     frameStyle = document.createElement('style')
-    frameStyle.setAttribute('data-praxis-frame-style', '')
+    frameStyle.setAttribute('data-trezi-frame-style', '')
     frameStyle.textContent =
       '::-webkit-scrollbar{display:none !important;width:0 !important;height:0 !important}' +
-      'html,body{scrollbar-width:none !important}'
+      '*,*::before,*::after{scrollbar-width:none !important}'
     document.documentElement.appendChild(frameStyle)
   } else if (!on && frameStyle) {
     frameStyle.remove()
     frameStyle = null
   }
+}
+
+function setFrame(on: boolean): void {
+  hideScrollbars(on)
   if (!on) {
     frameHost?.remove()
     frameHost = null
@@ -1602,7 +1681,7 @@ function setFrame(on: boolean): void {
     return
   }
   const host = document.createElement('div')
-  host.setAttribute('data-praxis-frame', '')
+  host.setAttribute('data-trezi-frame', '')
   host.style.cssText =
     'position:fixed !important;inset:0 !important;overflow:hidden !important;' +
     'pointer-events:none !important;z-index:2147483646 !important'
@@ -1623,9 +1702,34 @@ function setFrame(on: boolean): void {
   positionFrame()
 }
 
+const threeD = createThreeDInspector({
+  hasSource: (el) => !!findSource(el),
+  code: (el) => {
+    selectedEl = el
+    ipcRenderer.send(PICKED, describe(el))
+    ipcRenderer.send(TOOLBAR_ACTION, 'code')
+  },
+  select: (el, open) => {
+    clearStylePreview()
+    selectedEl = el
+    ipcRenderer.send(PICKED, describe(el))
+    if (open) ipcRenderer.send(TOOLBAR_ACTION, 'props')
+  },
+  lost: () => {
+    selectedEl = null
+    ipcRenderer.send(CANCELLED)
+  },
+  close: () => {
+    if (selectedEl?.isConnected) {
+      showToolbar(selectedEl)
+      setSelectionHighlight(selectedEl)
+    }
+  }
+})
+
 const previewDrag = IS_SIM_BRIDGE ? null : installDragReorder({
   selection: () => selectedEl,
-  blocked: () => !!(editing || commenting || commentMode),
+  blocked: () => threeD.active() || !!(editing || commenting || commentMode),
   overlay: () => { ensureOverlay(); return overlayHost!.shadowRoot! },
   clearHover: () => { hideOverlay(); clearMeasure() },
   move: request => ipcRenderer.send(PREVIEW_MOVE_NODE, request)
@@ -1648,6 +1752,14 @@ window.addEventListener('click', onClick, true)
 window.addEventListener('dblclick', onDblClick, true)
 window.addEventListener('keydown', onKey, true)
 window.addEventListener('keyup', onKeyUp, true)
+for (const type of [
+  'keypress', 'pointerdown', 'pointerup', 'pointermove', 'mousedown', 'mouseup',
+  'mousemove', 'click', 'dblclick', 'auxclick', 'contextmenu', 'dragstart',
+  'touchstart', 'touchmove', 'touchend', 'wheel', 'beforeinput', 'input',
+  'compositionstart', 'compositionupdate', 'compositionend', 'paste', 'cut', 'copy'
+]) {
+  window.addEventListener(type, blockPageInput, { capture: true, passive: false })
+}
 // A window switch (Cmd+Tab) swallows the Option keyup — drop the measurement
 // rather than leave it stuck on when focus comes back.
 window.addEventListener('blur', () => {
@@ -1698,14 +1810,14 @@ window.addEventListener('pagehide', () => {
   if (editing) endEdit()
 })
 
-// Report whether the previewed app is "praxis-ready" — i.e. its elements carry
-// data-praxis-source stamps — so the app can offer to set up an unprepared project.
+// Report whether the previewed app is "trezi-ready" — i.e. its elements carry
+// data-trezi-source stamps — so the app can offer to set up an unprepared project.
 // Re-sampled a few times so a slow-rendering SPA (stamps appear after `load`)
 // isn't falsely flagged; the renderer retracts the offer on any stamps>0 report.
 function reportReadiness(): number {
   if (!location.protocol.startsWith('http')) return -1 // skip the placeholder
-  const stamps = document.querySelectorAll('[data-praxis-source]').length
-  ipcRenderer.send(READINESS, { stamps })
+  const stamps = document.querySelectorAll(sourceSelector()).length
+  ipcRenderer.send(READINESS, { stamps, url: location.href, documentStartedAt: performance.timeOrigin })
   return stamps
 }
 window.addEventListener('load', () => {
@@ -1729,10 +1841,12 @@ window.addEventListener('load', () => {
     buildPins()
   })
   ipcRenderer.on(SET_FRAME, (_e, on: boolean) => setFrame(on))
+  ipcRenderer.on(PREVIEW_HIDE_SCROLLBARS, (_e, on: boolean) => hideScrollbars(on))
   // The renderer cleared the selection (pill ×, message sent, delete) — drop the
   // element-scoped toolbar + persistent outlines with it.
   ipcRenderer.on(CLEAR_SELECTED, () => {
     selectedEl = null
+    threeD.close()
     hideToolbar()
     setSelectionHighlight(null)
     clearMeasure()
@@ -1748,6 +1862,15 @@ window.addEventListener('load', () => {
   })
   ipcRenderer.on(STYLES_READ, (_e, p: { id?: unknown; props?: unknown }) => {
     readStyles(p?.id, Array.isArray(p?.props) ? (p.props as string[]) : [])
+  })
+  // A Shadow island gesture shown without source writes (LKM-140, see island-override.ts).
+  ipcRenderer.on(ISLAND_OVERRIDE, (_e, p: { id?: unknown } | undefined) => {
+    ipcRenderer.send(ISLAND_OVERRIDE_REPLY, { id: p?.id, value: islandOverride(p) })
+  })
+  ipcRenderer.on(ANIMATION_REPLAY, (_e, component: unknown) => {
+    if (typeof component === 'string' && component.length <= 80)
+      window.dispatchEvent(new CustomEvent('trezi:animation-replay', { detail: component }))
+      window.dispatchEvent(new CustomEvent('praxis:animation-replay', { detail: component }))
   })
   ipcRenderer.on(STYLES_REPLAY, (_e, p: { prop?: unknown; from?: unknown; to?: unknown }) => {
     if (typeof p?.prop === 'string' && typeof p?.from === 'string' && typeof p?.to === 'string')

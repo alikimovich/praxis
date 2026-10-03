@@ -28,7 +28,7 @@ function tryBind(port: number, host?: string): Promise<'free' | 'in-use' | 'erro
  * dual-stack wildcard on that port — the shape any `server.listen(port)` takes.
  * A false "free" is not a harmless retry: start() hands the port to the dev
  * server AND settles on the first thing that answers `http://host:port`, so the
- * squatter answers before our own server fails to bind and praxis previews a
+ * squatter answers before our own server fails to bind and trezi previews a
  * stranger's app under the user's project name. Hence the second, wildcard
  * probe. It only ever votes "occupied" on an explicit EADDRINUSE — a wildcard
  * bind refused for any other reason (a sandbox, no IPv6) says nothing about the
@@ -143,26 +143,18 @@ export function defaultPorts(framework?: Framework): number[] {
   }
 }
 
-const rendererPort = ((): string => {
-  try {
-    return process.env.ELECTRON_RENDERER_URL ? new URL(process.env.ELECTRON_RENDERER_URL).port : ''
-  } catch {
-    return ''
-  }
-})()
 
 /**
  * If the user already runs this project's dev server, find it so we can attach
  * instead of spawning a competitor — two dev servers on one project clash (e.g.
  * over SvelteKit's .svelte-kit/) and the duplicate errors. We only attach to a
- * HEALTHY server (status < 400), and never to praxis's own renderer.
+ * HEALTHY server (status < 400). Trezi has no application web server.
  */
 export async function findRunningServer(
   framework?: Framework,
   probeFn: (url: string, ms?: number) => Promise<number | null> = probe
 ): Promise<string | null> {
   for (const port of defaultPorts(framework)) {
-    if (String(port) === rendererPort) continue
     for (const host of ['127.0.0.1', '[::1]']) {
       const status = await probeFn(`http://${host}:${port}`, 1000)
       if (status != null && status < 400) return `http://${host}:${port}`

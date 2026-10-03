@@ -10,15 +10,15 @@
  * fields the parser reads, since each real entry also carries a multi-KB
  * `base_instructions` blob (the full payload is ~300KB). The Claude fixture is
  * the real `Query.supportedModels()` answer from the same day, including the
- * SDK's own `default` sentinel, which collides with praxis's.
+ * SDK's own `default` sentinel, which collides with trezi's.
  *
- * The clock and baseDir are injected, so TTL expiry is tested without sleeping
- * and persistence without touching userData — the whole reason this module is
- * split out of providers.ts.
+ * The clock, baseDir and persist callback are injected, so TTL expiry is tested
+ * without sleeping and persistence without touching userData or the service: the
+ * Swift provider owner writes the file (LKM-111), `ownerPersist` stands in for it.
  *
  * Run with: bun run test:model-catalog
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -28,12 +28,31 @@ import {
   parseCodexModels
 } from '../src/main/model-catalog.ts'
 
-const base = mkdtempSync(join(tmpdir(), 'praxis-model-catalog-'))
+const base = mkdtempSync(join(tmpdir(), 'trezi-model-catalog-'))
 let failed = 0
 const ok = (cond, msg) => {
   if (!cond) {
     console.error(`FAIL: ${msg}`)
     failed++
+  }
+}
+
+// Stands in for the Swift provider owner, the only writer since LKM-111: it merges one
+// backend's entry into the versioned file the Bun reader parses on the next launch.
+const ownerPersist = (dir, now) => (backend, models) => {
+  const file = join(dir, 'model-catalog.json')
+  let doc
+  try {
+    doc = JSON.parse(readFileSync(file, 'utf8'))
+  } catch {}
+  if (!doc || typeof doc.entries !== 'object' || Array.isArray(doc.entries)) doc = { version: 1, entries: {} }
+  doc.entries[backend] = { at: now(), models }
+  try {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(file, JSON.stringify(doc))
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -172,7 +191,7 @@ try {
   // --- cache: hit, expiry, persistence ---------------------------------------
   let clock = 1_000_000
   const cacheDir = join(base, 'cache')
-  const cache = createModelCatalog({ baseDir: cacheDir, now: () => clock })
+  const cache = createModelCatalog({ baseDir: cacheDir, now: () => clock, persist: ownerPersist(cacheDir, () => clock) })
 
   ok(cache.get('codex') === null, 'a never-populated backend reads as null (not [])')
   ok(cache.isStale('codex') === true, 'a never-populated backend is stale — go discover')
@@ -204,7 +223,7 @@ try {
 
   // Persistence: a second catalog over the same dir sees the first one's writes,
   // which is what makes a fresh launch show real models before any session exists.
-  const reopened = createModelCatalog({ baseDir: cacheDir, now: () => clock })
+  const reopened = createModelCatalog({ baseDir: cacheDir, now: () => clock, persist: ownerPersist(cacheDir, () => clock) })
   ok(
     reopened
       .get('codex')
@@ -239,7 +258,7 @@ try {
   for (const [what, body] of corruptCases) {
     const dir = mkdtempSync(join(base, 'corrupt-'))
     writeFileSync(join(dir, 'model-catalog.json'), body, 'utf8')
-    const c = createModelCatalog({ baseDir: dir, now: () => clock })
+    const c = createModelCatalog({ baseDir: dir, now: () => clock, persist: ownerPersist(dir, () => clock) })
     ok(c.get('codex') === null, `${what}: degrades to empty`)
     ok(c.isStale('codex') === true, `${what}: reads as stale, so discovery reruns`)
     // …and it is recoverable: the next successful probe simply overwrites it.
@@ -260,12 +279,16 @@ try {
     }),
     'utf8'
   )
-  const half = createModelCatalog({ baseDir: halfDir, now: () => clock })
+  const half = createModelCatalog({ baseDir: halfDir, now: () => clock, persist: ownerPersist(halfDir, () => clock) })
   ok(half.get('codex') === null, 'the mangled backend reads as absent')
   ok(half.get('claude')?.[0]?.id === 'sonnet', 'the intact backend is unaffected')
 
   // An unwritable baseDir costs persistence, never correctness.
-  const blocked = createModelCatalog({ baseDir: join(base, 'file-not-a-dir'), now: () => clock })
+  const blocked = createModelCatalog({
+    baseDir: join(base, 'file-not-a-dir'),
+    now: () => clock,
+    persist: ownerPersist(join(base, 'file-not-a-dir'), () => clock)
+  })
   writeFileSync(join(base, 'file-not-a-dir'), 'x', 'utf8')
   blocked.set('codex', codex)
   ok(blocked.get('codex').length === 6, 'a failed write still serves the in-memory list')

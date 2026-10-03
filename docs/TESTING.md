@@ -1,0 +1,308 @@
+# Testing Trezi
+
+The test runner is `node test/run.mjs unit|native|live|all`. Unit checks run with
+bounded concurrency (default up to four workers). `service-process` is an exclusive
+barrier (no parallel workers) and has a 240 s budget because it compiles the full
+Swift service. `keychain-rebuild` (LKM-144) is exclusive too, with 300 s, because it
+compiles the Keychain helper three times. Keychain tests use only password-made
+temporary keychains and calls that cannot prompt. Native desktop and live provider checks are serial. Logs and JSON summaries are written to `test/artifacts/runs/`;
+a lock prevents overlapping runner invocations. PASS, SKIP, FAIL, timeout and
+cancellation remain distinct outcomes. Each test is killed after 120 s by default
+(`--timeout-ms=<ms>` overrides it).
+
+```sh
+bun run typecheck
+bun run typecheck:native
+node test/run.mjs unit
+node test/run.mjs unit --filter=trezi-cli,native-workspace-controller
+node test/run.mjs unit --serial
+bun run test:native
+```
+
+`bun run test` runs unit and native tiers. `bun run verify` adds live provider
+turns; those require explicit authorization and credentials. The native-runtime test
+builds the app; focused native checks reuse that build and skip when unavailable.
+`bun run test:native` runs native-runtime and then native-chat-scroll with
+`--require-build`, so a missing host there fails instead of skipping.
+Electron/Playwright application tests were removed when the runtime was retired.
+Their historical coverage is not claimed as native parity.
+
+Native integration uses a disposable profile/project, Swift host and real Bun
+controllers. It checks project switching, sheets, streaming/queues, permissions,
+source/content/style writes, window geometry, docking, preview input isolation and
+that exactly one WebKit view exists. `TREZI_NATIVE_BACKGROUND_TEST=1` skips real
+pointer gestures/animation timing, which must be reported as reduced coverage.
+`test:native-live` separately submits a real provider turn against a fixture.
+
+### Native smoke summary
+
+The native smoke (`src/native/smoke-core.ts`, run by `test/native-runtime.mjs`)
+is a list of named checks run by `src/native/smoke-runner.ts`. A failing check
+does not end the run. Its failure is recorded, the window is captured to
+`test/artifacts/native/failure-<check>.png`, the check's own cleanup runs, and
+then the shared restore (`src/native/smoke-restore.ts`) runs. The restore closes
+sheets, menus and popovers, re-keys the main window, turns select mode off,
+reselects the first fixture project in desktop viewport and reloads its page if
+needed. After that the remaining checks run. A check that declares `dependsOn`
+is skipped when any of those checks did not pass. Checks with no
+dependency on the failed one still run. A failed cleanup or restore is logged as
+`WARN [smoke] <check> <cleanup|restore> after failure: …` and does not stop the
+run. If the native host exits, every remaining check is skipped. Each check
+logs `START`, `PASS`/`FAIL` or `SKIP [smoke] <check>` as it runs, and the run
+ends with:
+
+```text
+NATIVE SMOKE SUMMARY: <passed> passed, <failed> failed, <skipped> skipped (<total> checks)
+FAILED <check>
+  assertion: <first non-empty line of the error message>
+  at: <smoke-*.ts:line:column of the failing assertion, when the stack has one>
+  capture: <absolute path of failure-<check>.png, or "unavailable (<reason>)">
+SKIPPED <check>
+  skipped: depends on <first dependency that did not pass, or "native host (it exited)">
+```
+
+Failures and skips are listed in run order. If any check did not pass, the smoke
+exits non-zero. `NATIVE CORE PASS` is printed only when every check passed. To see
+the collect-all behaviour in a real run, set
+`TREZI_NATIVE_SMOKE_FAIL=<check>[,<check>]`. Each named check then fails
+deliberately without running, and its dependents are skipped. Unknown names are
+rejected before anything runs. `test/native-smoke-runner.mjs` (unit tier) runs a
+fixture list that includes a deliberately failing check. It asserts that later
+checks still run and that dependents are skipped with their reason, and it
+checks the exact summary text.
+
+`node test/native-source-window.mjs` checks the popped-out editor's initial size,
+programmatic resizing, code viewport, docking/reopening and draft retention using
+a disposable native host. It requires an existing build and writes
+`test/artifacts/native/source-window.png`. It does not exercise pointer resizing.
+
+`node test/native-chat-scroll.mjs` uses a disposable native host with fixture
+snapshots to check that sent questions and streamed responses remain visible
+above the floating composer across short/long histories and shrinking drafts.
+It also reveals a nested chat island (mid-history, starting offscreen) at 440pt
+and the 320pt minimum chat width:
+each top/bottom reveal must settle with its anchor within 8pt of the reading
+edge, and overlapping pairs (top→bottom, bottom→top, top→top) must reject the
+older request as superseded (naming the newest revision) while the newest
+settles. It requires an existing native build and makes no provider calls.
+Captures are written to `test/artifacts/native/chat-scroll/`, including
+`reveal-<width>-{top,bottom}.png`, `reveal-<width>-overlap-<first>-<second>.png`
+and the measured revisions/frames in `reveal-<width>.json`.
+
+LKM-139: after the shell send, the `send-visibility` stage
+(`test/helpers/chat-send-visibility.mjs`) sends into a long transcript at
+440/320pt with a fixed and a growing composer and samples `chatInspect` after
+send, mid-stream and done: visible rows > 0, offset ≤ maxOffset and an unchanged
+scroll view/document. It writes `send-after-send.png`, `send-mid-stream.png` and
+`send-visibility.json`. The windowless unit test `test/native-chat-latest-settle.mjs`
+covers the same follow path with a `--no-settle` negative control.
+
+LKM-103 acceptance runs at the end of native-chat-scroll, which `bun run test:native`
+invokes with `--require-build` after native-runtime (a missing host fails there
+instead of skipping). The standalone command still works.
+
+**Verification never changes the user's macOS settings.** It must not
+read-modify-write system preferences: no `defaults`, CFPreferences writes,
+system domains, or preference broadcasts. `test/no-system-preferences.mjs`
+(unit tier) fails if app code, helpers or the harness do any of these.
+Scroller and accessibility modes are switched through `ChatSystemEnvironment`
+(`src/native/ChatEnvironment.swift`), an in-process override that only the
+ephemeral-profile `chatAcceptance` host command can set:
+`{ environment: { scrollers: 'Always'|'WhenScrolling' } }`,
+`{ environment: { accessibility: { increaseContrast, reduceTransparency, reduceMotion } } }`
+and `{ environment: { clear: true } }`. The override dies with the test host.
+
+With no override, the provider returns the real `NSScroller.preferredScrollerStyle`
+and `NSWorkspace` accessibility values, read live. The probe applies the
+scroller style to the conversation's NSScrollView. Accessibility values feed
+the SwiftUI environment keys (`colorSchemeContrast`,
+`accessibilityReduceTransparency`, `accessibilityReduceMotion`) that the chat's
+views and the composer beam read. AppKit's own high-contrast drawing of native
+controls cannot be forced per view (`NSAppearance` maps the accessibility names
+back to Aqua/DarkAqua), so the scroll view's appearance is never replaced and
+the native scroller keeps following macOS. The acceptance asserts this
+(`scrollAppearance` empty). Diagnostics include `system` (read-only real values),
+`accessibility` (effective), `rendered` (what SwiftUI views read) and
+`environmentOverridden`.
+
+Inspect these artifacts under `test/artifacts/native/chat-scroll/`:
+
+- `acceptance-{440,320}-{1,6,80}-lines.png/.json`: full foreground chat column,
+  all three exterior gaps equal 10, contained/aligned/hittable controls, whole
+  latest row above clearance, latest-message OCR, capped versus uncapped input.
+- `acceptance-{440,320}-resized-{short,tall}.png/.json` (capped draft, then
+  resize) and `acceptance-{440,320}-short-1-line`/`-short-then-grow[-tall]`
+  (short window, then growth to the cap): latest row remains reachable in
+  both orders while composer height and viewport size change. `pinCount`
+  records the probe's settled-metric follow pins; `pinned`/`userScrollCount`
+  record the probe's user-input-owned latest state (wheel, live scroll, keys).
+  Input reaches the app as window-targeted events via `NSApp.postEvent` (never
+  `postToPid`, whose events have no window). If a wheel check fails, read
+  `monitorCallbacks`, `scrollWheelEvents` and `lastInputRejection` to see
+  where the event stopped. `probeShowsLatest`/`modelShowsLatest` show whether
+  the latest button should be visible and whether SwiftUI received it.
+  The thumb drag queues its dragged/up events and then delivers the mouseDown
+  with `window.sendEvent`, so the hit-tested NSScroller's own tracking loop
+  consumes them (`src/native/ScrollerDrag.swift`). `lastDrag` in every
+  inspection, and `acceptance-<mode>-<n>-drag.json`, record the hit target, the
+  consumed/leftover counts and scrollY before/after.
+- `acceptance-{WhenScrolling,Always}-*-{idle,active,hover,dragged,latest}.png/.json`:
+  actual SwiftUI probe attachment, native small scroller, wheel and thumb movement,
+  real latest-button click, no hover/drag viewport-width jump, live scroller-mode
+  override reaching the probe, and visible non-autohiding Always scroller. Review resting/active
+  visual prominence; numeric geometry alone cannot prove the intended appearance.
+- `acceptance-accessibility-{true,false}[-latest].png/.json`: all three modes
+  switched through the override and received by the conversation's SwiftUI
+  environment (`rendered`), plus functional wheel/latest scrolling and stable layout.
+- `acceptance-{440,320}-scrolled-up.png/.json` (LKM-141): the latest button scrolled
+  into history, asserted round, centered over the column, `latestButtonGap` above
+  `composerTop`, below `readingHeight` (never over the reading area) and labelled.
+- `tokens-{running,done}-{440,320}.png` and `tokens-{440,320}.json` (LKM-141): a
+  turn's counter after "Thinking…" while running, then under Copy/Revert, with
+  the footer's height and bottom unchanged by completion.
+- `acceptance-results.json`: successful assertion summary; `acceptance-failure.*`
+  retains failure diagnostics and foreground pixels when capture remains available.
+
+The core suite also writes `test/artifacts/native/composer-visible-{440,320}-*.png`
+and JSON for real attachment-dialog/file, model, Auto, AppKit typing and submission
+checks. The draft is multiline at 440 points and capped at 320 points. These
+fixtures must run in the foreground; no background-coverage exception is applied.
+`bun test/no-system-preferences.mjs` is the system-settings guard described above.
+
+`node test/native-next-hmr.mjs` checks Next.js 16.3.5 in Webpack mode through
+Trezi's managed dev server and system WebKit. It installs dependencies into a
+disposable copy of the Next fixture (registry access/cache required), checks
+ordinary component edits plus chat-island commits and Undo, and asserts that the
+page is never reloaded. It needs an existing native build and runs in the native
+tier after `native-runtime`. No provider calls are made. Static-site live reload
+coverage alone does not verify framework Fast Refresh.
+
+Shadow Light verification requires macOS 14.4+ for ScreenCaptureKit's
+current-process window capture. It captures only Trezi's own foreground window,
+then crops to chat pixels and checks visible labels with OCR. It does not launch
+an external screen recorder or request access to other applications. Inspect
+`shadow-light-{initial,adjusted,restored}.png` and their `-bottom` companions against
+the approved mockup; OCR presence is not a substitute for layout review. Capture
+or OCR failures fail verification without an offscreen fallback.
+
+The same check drags the light through 8 frames of one gesture (LKM-140). A
+page-world sampler records the card's computed box-shadow every animation frame.
+Gaps, out-of-order values and foreign values must all be 0, and the source must
+not change before the release. It writes `shadow-light-drag.png` (mid-drag),
+`shadow-light-released.png` and `shadow-light-drag.json` (the counts). The unit
+test `test/island-flicker.mjs` models a gap HMR to record the same counts before
+and after the fix. With TreziHost built, `test/island-flicker-frameworks.mjs` runs
+the same drag on real Next.js Webpack HMR and a Vite/CSS module fixture.
+`test/island-override.mjs` runs the preview override module on a fake DOM. It checks
+that the override survives HMR remounts and that it is removed only on the final value.
+
+Read screenshots in `test/artifacts/native/` for UI verification. Offscreen
+AppKit captures do not faithfully paint Liquid Glass; visible inspection may be
+necessary. Never start the target project server manually alongside Trezi.
+
+Sidebar folder acceptance runs inside the normal native project-switching fixture.
+`sidebar-{260,180}-{0,1}-{rest,hover}.png` captures only the foreground sidebar
+through ScreenCaptureKit, with matching JSON containing OCR and row geometry.
+Both projects must be visible, one with stored raster artwork and one without;
+each is selected in turn. Assertions require the folder image, template tint,
+exact 16×16 icon frame at an integral origin, a seven-point gap to the label's
+alignment rect (its frame adds AppKit's 2-point cell padding), icon and label
+x equal to Open Project's, containment, accessibility action label and correct
+More visibility. Blank captures or missing project labels fail.
+`sidebar-interactions.json` records native menu tracking/cancel, the Project Memory
+menu action opening its form, and production pasteboard/validate/accept-drop
+callbacks plus backend order changes at both widths. Drag checks reject no-op and
+nested drops and preserve selection. They exercise delegates with a local test
+drag object, not physical pointer travel. Hover uses native enter/exit callbacks.
+After the menu/Project Memory step, after reorder and in teardown (which also runs
+on failure), `sidebarFocus` cancels tracking menus, ends sheets/modals, dismisses
+Trezi's sheet window and popovers, clears hover and re-keys the main window. The
+fixture then requires no tracking menu, sheet or popover, a key and main window,
+and an active app, naming any leftover. Each capture is preceded by the same
+report. A failed capture keeps the guard's message and appends the report; it is
+never retried. `test/sidebar-focus.mjs` covers this logic without a window.
+`sidebar-selection.json` records the project/chat/preview assertions from the
+existing native selection callback checks after opening the second fixture.
+Review the PNGs for outline glyph fidelity and contrast; physical drag animation
+and pointer targeting remain manual review checks. After a passing smoke run, `test/native-runtime.mjs` fails unless all eight
+captures, their JSON, `sidebar-selection.json` and both widths' menu/reorder
+records were freshly written by that run. `test/sidebar-evidence.mjs`
+rejects deliberately blank, clipped, misaligned and incorrect-state evidence
+without launching a desktop.
+`test/sidebar-sizing.mjs` exercises AppKit split layout without a window, checking
+that requested content widths account for sidebar wrapper insets after reveal.
+`test/sidebar-icon.mjs` lays out a windowless source list and Open Project button
+with `SidebarIconView` across symbol scales at 260/180 points: each folder frame
+must be exactly 16×16, integral, pixel aligned and free of symbol alignment insets.
+
+New tests belong in the appropriate array in `test/run.mjs`. Pure tests must own
+their temporary directories/ports and clean up processes. Use injected service
+registries when testing lifecycle behavior without the desktop. Renderer-specific
+unit tests were removed; retained backend generation tests use React as a dev
+fixture to verify that generated project code actually renders.
+
+### Native smoke groups
+
+`bun run dev:native --test --only=group,group` (or
+`bun test/native-runtime.mjs --only=…`) runs only the named groups. It
+filters which of the named smoke checks run (see "Native smoke summary"); failure
+collection is unchanged. The `startup`, `open-project`, `chat-ready` and
+`final-shell` checks (setup, and the closing capture plus one-WebKit-view check)
+always run; with no flag every group runs. `src/native/smoke-groups.ts` maps each
+check to its group, and a check with no group there is an error:
+
+| Group | Covers |
+| --- | --- |
+| `core` | mobile viewport/reload, source stamps, toolbar/preview surface, divider/expand, layers, selection input, inspector style edit and floating island (preview width open/closed, resize, hit targets, scrolling), text edit + undo/redo, popped-out source editor, preview Web Inspector |
+| `islands` | `chat-islands`, generic part: Swift rendering, point commit, Undo, landing gate |
+| `shadow-light` | `chat-islands`, Shadow Light part (same fixture scope; the check runs when either group is selected) |
+| `sidebar` | project switching and visible sidebar captures/interactions |
+| `settings` | sheets and forms: running servers, New project, project memory, Settings (General, inline AI Providers, Experimental), feedback, diagnose, activity |
+| `chat` | native chat streaming/queues/permissions (`smoke-chat.ts`) |
+| `composer` | composer growth/paste/attachments, per-chat drafts, slash commands, visible composer |
+
+An unknown or empty group name fails before the build. `--live` requires `core`
+(the live turn edits the heading the core group writes). `native-runtime` only
+demands fresh sidebar evidence when `sidebar` ran. Acceptance still needs the
+full suite.
+
+## GitHub CI
+
+`.github/workflows/ci.yml` runs one job, "typecheck + unit tests".
+
+- **Triggers.** It runs on a push to `main` or `candidate` and on every pull
+  request. Pushes to other branches (throwaway and worker branches) do not start
+  a run.
+- **Runner.** The job runs on `macos-26`, GitHub's hosted macOS 26 (Tahoe) arm64
+  image. The Swift service owners compile against the macOS 26 SDK
+  (`MIN_SDK` in `scripts/requirements.mjs`). That image's default Xcode 26
+  provides it, so the job needs no `xcode-select`. An Ubuntu runner cannot build
+  them, and an older macOS image ships an older SDK. The "Toolchain" step prints
+  the selected Xcode, `swiftc --version` and `git --version` (Git's wording
+  differs between versions, LKM-150), then runs
+  `bun scripts/requirements.mjs --build`. If the image ever ships an older SDK,
+  that step fails before any tests run.
+- **Commands**, in order:
+
+  ```sh
+  bun install --frozen-lockfile
+  bun run typecheck
+  bun run typecheck:native
+  node test/run.mjs unit --timeout-ms=120000
+  ```
+
+  If a step fails, the run uploads `test/artifacts/runs/` as `unit-test-logs`.
+  CI runs no native GUI tier and no live tier. The runner has no desktop session
+  for the smoke suite and no provider credentials. Run those tiers on a Mac.
+- **Skips off macOS.** Unit tests that compile Swift call the gates in
+  `test/helpers/darwin.mjs`. The service-owner fixtures in `test/helpers/*-fixture.mjs`,
+  the ledger, preferences, memory, workspace and platform owner tests, and every
+  suite that loads `with-service-owners.mjs` use `skipUnlessDarwin`. The
+  AppKit fixture tests (sidebar, slider, composer, settings layout, chat reveal)
+  check `process.platform` themselves. On Linux each of these tests prints
+  `<NAME> SKIP — <reason>` and exits 0. `test/run.mjs` reports it as `SKIP`, never
+  `PASS`, and a unit run with only PASS and SKIP exits 0. `service-contract` uses
+  `skipUnlessSwift`: the contract builds with swift-corelibs-foundation, so on
+  Linux it still runs when `swiftc` is on `PATH`. On macOS a missing or broken
+  toolchain fails instead of skipping, so the macOS job cannot go green by
+  skipping Swift checks.

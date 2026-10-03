@@ -13,8 +13,8 @@
  */
 
 /** GitHub's hard issue-body limit; stay safely under it. */
-const BODY_LIMIT = 65536
-const SAFE_LIMIT = 60000
+export const BODY_LIMIT = 65536
+export const SAFE_LIMIT = 60000
 
 /** Collapse the feedback's first non-empty line into a concise issue title. */
 export function buildFeedbackTitle(body: string): string {
@@ -46,7 +46,7 @@ export function buildFeedbackBody(parts: FeedbackBodyParts): string {
   const feedback = parts.body.trim() || '_(no description provided)_'
   const sections: string[] = [feedback]
 
-  const footer = '\n\n---\n_Sent from Praxis via the in-app feedback button._'
+  const footer = '\n\n---\n_Sent from Trezi via the in-app feedback button._'
 
   // Budget remaining after the feedback text + footer, for the optional blocks.
   const used = (): number => sections.join('\n\n').length + footer.length

@@ -86,6 +86,8 @@ export function tailwindClassFor(prop: string, value: string): string | null {
     return arbitrary(spacing, value)
   }
   switch (prop) {
+    case 'box-shadow':
+      return value.trim() === 'none' ? 'shadow-none' : arbitrary('shadow', value)
     case 'border-radius': {
       const name = v && (v.unit === 'px' || v.n === 0) ? RADIUS_PX.get(v.n) : undefined
       return name ? `rounded-${name}` : arbitrary('rounded', value)
@@ -203,6 +205,11 @@ function isFamilyMatch(prop: string, cls: string): boolean {
     return SCALE_SUFFIX_RE.test(suffix) || /^\[.+\]$/.test(suffix)
   }
   switch (prop) {
+    case 'box-shadow': {
+      const inner = arbitraryInner(cls, 'shadow')
+      return /^shadow(?:-(?:none|2xs|xs|sm|md|lg|xl|2xl|inner))?$/.test(cls) ||
+        (inner != null && !isColorInner(inner))
+    }
     case 'border-radius':
       return RADIUS_CLASS_RE.test(cls) || arbitraryInner(cls, 'rounded') != null
     case 'color': {

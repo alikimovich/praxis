@@ -1,304 +1,268 @@
 #!/usr/bin/env node
-// Test runner for Praxis. Replaces the old &&-mega-chains in package.json.
-//
-// Usage: node test/run.mjs <tiers...>   where tier ∈ unit | electron | live | all
-//
-//   unit     — pure-bun logic tests (no build, no display). Run with `bun`.
-//   electron — Playwright/Electron UI tests. `electron-vite build` runs ONCE
-//              before the tier, then each test runs with `node`.
-//   live     — agent/codex/sim e2e. Need creds/display; they self-SKIP (exit 0)
-//              without them, which the runner counts as a pass. Run with `node`.
-//   all      — unit + electron + live.
-//
-// Behavior: spawn each test as a subprocess, KEEP GOING on failure, treat
-// exit code 0 as PASS (the e2e self-SKIP convention is exit 0 → pass), print a
-// summary table at the end, and exit non-zero if any test FAILED.
-
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+// Bounded subprocess runner. See docs/TESTING.md for isolation and reporting.
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { acquireRunLock, runCommand, runQueue } from './helpers/test-runner.mjs';
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(TEST_DIR);
 
 // --- Tier membership (derived from package.json `test` and `verify` scripts) ---
 
-// unit = the `bun test/NAME.mjs` group before `electron-vite build` in `test`.
+// Backend logic checks run independently of the native desktop.
 const UNIT = [
-  'conversation-handoff',
-  'pr-body',
-  'feedback-body',
-  'publish-message',
-  'slash-token',
-  'skills-discovery',
-  'provider-skills',
-  'github-connect',
-  'html-source',
-  'project-key',
-  'project-create',
-  'project-icon',
-  'devserver-net',
-  'xcode',
-  'git',
-  'publish-reconcile',
-  'sidecar-migrate',
-  'diag-cache',
-  'diag-rules',
-  'sessions-store',
-  'preferred-model',
-  'project-memory',
-  'project-memory-evaluation',
-  'providers-store',
-  'model-catalog',
-  'codex-retry-cause',
-  'codex-stream',
-  'praxis-agent-tools',
-  'interrupt-escalation',
-  'terminal-streams',
-  'turn-terminal',
-  'chat-title',
-  'markdown-color',
-  'chat-settings',
-  'run-stats',
-  'codex-usage',
-  'edit-history',
-  'worktrees',
-  'chat-worktrees',
-  'live-commit',
-  'file-tree',
-  'file-ops',
-  'media-types',
-  'attachments',
-  'rules',
-  'tw-classes',
-  'tw-styles',
-  'token-match',
-  'style-tokens',
-  'layers-move',
-  'layers-labels',
-  'measure-distance',
-  'sibling-drop',
-  'inline-style',
-  'css-values',
-  'elide-url',
-  'control-panels',
-  'svelte-instance',
-  'docs-links',
-  'update',
-  'spring',
-  'apca',
-  'fluid',
-  'oklch',
-  'shadows',
-  'type-metrics',
-  'skills-install',
-  'praxis-cli',
+  "service-contract",
+  "service-process",
+  "operation-ledger",
+  "preferences-owner",
+  "workspace-owner",
+  "memory-owner",
+  "runtime-owner",
+  "repository-owner",
+  "git-messages",
+  "repository-recovery",
+  "source-owner",
+  "conversation-owner",
+  "provider-owner",
+  "provider-data",
+  "provider-login",
+  "provider-cold-start",
+  "turn-progress",
+  "provider-helper-tools",
+  "service-session",
+  "native-settings-claude",
+  "editing-owner",
+  "workflow-owner",
+  "platform-owner",
+  "native-visible-capture",
+  "native-smoke-runner",
+  "rename-compat",
+  "source-stamp",
+  "native-boundary",
+  "trezi-agent-tools",
+  "preview-agent-tools",
+  "codex-mcp",
+  "codex-model",
+  "native-bridge-close",
+  "native-service-launch",
+  "native-supervised-bridge",
+  "native-preview-recovery",
+  "native-workspace-controller",
+  "preview-supervisor",
+  "native-support",
+  "activity-attention",
+  "display-path",
+  "native-sheets",
+  "native-settings",
+  "native-settings-layout",
+  "native-settings-evidence",
+  "native-chat-controller",
+  "stop-recovery-ui",
+  "network-volume-note",
+  "native-composer-layout",
+  "native-chat-latest-settle",
+  "native-smoke-wait",
+  "native-chat-reveal",
+  "native-island-editing",
+  "no-system-preferences",
+  "chat-islands",
+  "island-flicker",
+  "island-override",
+  "island-flicker-frameworks",
+  "native-context",
+  "native-updates",
+  "native-inspector",
+  "native-slider-ticks",
+  "native-layers",
+  "native-editor",
+  "native-shell-controller",
+  "sidebar-evidence",
+  "sidebar-sizing",
+  "sidebar-icon",
+  "sidebar-focus",
+  "native-git",
+  "native-support-sheets",
+  "native-cat-assets",
+  "project-ui",
+  "project-ui-svelte",
+  "project-ui-jev",
+  "jev-pilot",
+  "test-runner",
+  "setup-stamps",
+  "setup-vite",
+  "setup-vite-real",
+  "code-reveal",
+  "conversation-handoff",
+  "pr-body",
+  "feedback-body",
+  "publish-message",
+  "publish-description",
+  "slash-token",
+  "skills-discovery",
+  "provider-skills",
+  "github-connect",
+  "html-source",
+  "project-key",
+  "project-create",
+  "environment-changes",
+  "project-icon",
+  "devserver-net",
+  "sidecar-migrate",
+  "legacy-names-migrate",
+  "legacy-names-audit",
+  "diag-cache",
+  "diag-rules",
+  "sessions-store",
+  "preferred-model",
+  "project-memory",
+  "annotation-store",
+  "setup-next",
+  "shadow-controls",
+  "retirement-census",
+  "distribution",
+  "signing-identity",
+  "keychain-migration",
+  "keychain-rebuild",
+  "install-update",
+  "project-memory-evaluation",
+  "providers-store",
+  "model-catalog",
+  "codex-retry-cause",
+  "codex-stream",
+  "interrupt-escalation",
+  "turn-terminal",
+  "chat-title",
+  "chat-settings",
+  "background-model",
+  "comment-agents",
+  "run-stats",
+  "codex-usage",
+  "file-tree",
+  "media-types",
+  "rules",
+  "tw-classes",
+  "tw-styles",
+  "token-match",
+  "style-tokens",
+  "layers-move",
+  "layers-labels",
+  "measure-distance",
+  "sibling-drop",
+  "inline-style",
+  "css-values",
+  "control-panels",
+  "svelte-instance",
+  "docs-links",
+  "spring",
+  "apca",
+  "fluid",
+  "oklch",
+  "shadows",
+  "type-metrics",
+  "skills-install",
+  "trezi-cli",
+  "native-smoke-groups",
+  "docs-merge-union",
+  "versioning"
 ];
 
-// electron = the `node test/NAME.mjs` group AFTER `electron-vite build` in `test`.
-const ELECTRON = [
-  'cat-animations',
-  'startup-intro',
-  'browser-mode',
-  'remote-indicator',
-  'smoke',
-  'menu-recents',
-  'open-preview',
-  'mobile-frame',
-  'viewport-per-project',
-  'rail',
-  'rail-collapse',
-  'rail-favicon',
-  'chat-hide',
-  'editor-search',
-  'rail-chat-overflow',
-  'rail-chat-status',
-  'project-memory-ui',
-  'devserver-multi',
-  'static-serve',
-  'agent-multi',
-  'agent-cap',
-  'provider-seam',
-  'agent-history',
-  'history-ui',
-  'chat-render',
-  'provider-skills-menu',
-  'visual-edit-agent',
-  'revert-action',
-  'chat-route',
-  'composer-draft',
-  'restore-reload',
-  'preview-location',
-  'preview-iframe-navigation',
-  'feedback-dialog',
-  'connect-dialog',
-  'html-text-edit',
-  'questions',
-  'diagnose-card',
-  'select-element',
-  'measure-alt',
-  'comment-mode',
-  'spawn-comment',
-  'chat-isolation',
-  'prop-edit',
-  'style-edit',
-  'layers-panel',
-  'preview-drag',
-  'custom-controls',
-  'prop-edit-svelte',
-  'prop-svelte-self',
-  'code-peek',
-  'code-drawer',
-  'settings-connect',
-  'annotations',
-  'tokens',
-  'tokens-scaffold',
-  'ready-gating',
-  'text-edit',
-  'text-edit-svelte',
-  'setup-detect',
-  'setup-restart',
-  'sim-detect',
-  'sim-preflight',
-  'sim-frame',
-  'sim-control',
-];
-
-// live = the tests present in `verify` but not in `test`.
-const LIVE = [
-  'model-switch-e2e',
-  'agent-e2e',
-  'codex-e2e',
-  'controls-agent',
-  'tool-invocation',
-  'sim-e2e',
-  'style-provenance',
-];
-
-const TIERS = {
-  unit: { runner: 'bun', build: false, tests: UNIT },
-  electron: { runner: 'node', build: true, tests: ELECTRON },
-  live: { runner: 'node', build: false, tests: LIVE },
-};
-
-const TIER_ORDER = ['unit', 'electron', 'live'];
-
-// --- Arg parsing ---
-
-const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error('usage: node test/run.mjs <tiers...>  (unit | electron | live | all)');
+const NATIVE = ['native-runtime', 'native-source-window', 'native-chat-scroll', 'native-next-hmr'];
+const LIVE = ['native-runtime-live', 'provider-live-parity'];
+const TIERS = { unit: UNIT, native: NATIVE, live: LIVE };
+// Builds the full Swift service and runs real XPC; must not share workers with other
+// swiftc-heavy unit tests or the default 120 s budget is eaten by parallel compiles.
+// keychain-rebuild compiles the Keychain helper three times (LKM-144).
+const UNIT_EXCLUSIVE = new Set(['service-process', 'keychain-rebuild']);
+const UNIT_TIMEOUT_MS = { 'service-process': 240_000, 'keychain-rebuild': 300_000, 'setup-vite-real': 300_000 };
+const selected = new Set();
+const options = { jobs: Math.min(4, availableParallelism()),
+  'timeout-ms': 120_000, 'log-tail': 0, filter: null };
+let serial = false;
+try {
+  for (const arg of process.argv.slice(2)) {
+    if (arg === '--serial') serial = true;
+    else if (arg === 'all') Object.keys(TIERS).forEach(t => selected.add(t));
+    else if (Object.hasOwn(TIERS, arg)) selected.add(arg);
+    else {
+      const match = /^--(jobs|timeout-ms|log-tail|filter)=(.+)$/.exec(arg);
+      if (!match) throw new Error(`unknown argument: ${arg}`);
+      const [, key, value] = match;
+      if (key === 'filter') options.filter = new Set(value.split(','));
+      else {
+        const n = Number(value);
+        if (!Number.isSafeInteger(n) || n < 1 || n > 2_147_483_647) throw new Error(`invalid ${key}: ${value}`);
+        options[key] = n;
+      }
+    }
+  }
+  if (!selected.size) throw new Error('select at least one tier');
+  if (options.filter) {
+    const names = [...selected].flatMap(t => TIERS[t]);
+    for (const name of options.filter) if (!names.includes(name)) throw new Error(`test not in selected tiers: ${name}`);
+  }
+} catch (error) {
+  console.error(`${error.message}\nusage: node test/run.mjs <unit|native|live|all> [--serial] [--jobs=4] [--timeout-ms=120000] [--log-tail=150] [--filter=name,name]`);
   process.exit(2);
 }
 
-const selected = new Set();
-for (const arg of args) {
-  if (arg === 'all') {
-    for (const t of TIER_ORDER) selected.add(t);
-  } else if (TIERS[arg]) {
-    selected.add(arg);
-  } else {
-    console.error(`unknown tier: ${arg}  (expected unit | electron | live | all)`);
-    process.exit(2);
-  }
-}
-
-// --- Run ---
-
-function fmtDuration(ms) {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function runOne(runner, name) {
-  const file = join(TEST_DIR, `${name}.mjs`);
-  const started = Date.now();
-  // Each Electron test gets its own throwaway userData (main honors
-  // PRAXIS_USER_DATA): persisted state (workspace/recents localStorage) can't leak
-  // between tests — boot restore would otherwise auto-reopen a prior test's
-  // project — and each launch holds its own single-instance lock.
-  const userData = mkdtempSync(join(tmpdir(), `praxis-test-${name}-`));
-  let res;
-  try {
-    res = spawnSync(runner, [file], {
-      cwd: ROOT,
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        PRAXIS_USER_DATA: userData,
-        // Exercise the reveal only in its dedicated test. Preserve other motion
-        // and fresh-process isolation for ordinary UI tests.
-        PRAXIS_TEST_SKIP_INTRO: name === 'startup-intro' ? '0' : '1',
-      },
-    });
-  } finally {
-    rmSync(userData, { recursive: true, force: true });
-  }
-  const duration = Date.now() - started;
-  // spawnSync sets .error on spawn failure (e.g. runner not found) and .signal
-  // when killed by a signal; both are failures. Exit 0 (incl. e2e SKIP) = pass.
-  const ok = !res.error && res.signal == null && res.status === 0;
-  return { name, ok, duration, status: res.status, signal: res.signal, error: res.error };
-}
-
-function build() {
-  console.log('\n=== electron-vite build ===');
-  const res = spawnSync('electron-vite', ['build'], { cwd: ROOT, stdio: 'inherit' });
-  if (res.error || res.signal != null || res.status !== 0) {
-    console.error('electron-vite build FAILED — cannot run electron tier.');
-    return false;
-  }
-  return true;
-}
-
+const artifacts = join(TEST_DIR, 'artifacts', 'runs');
+mkdirSync(artifacts, { recursive: true });
+let releaseLock;
+try { releaseLock = acquireRunLock(join(artifacts, '.runner-lock')); }
+catch (error) { console.error(error.message); process.exit(2); }
+process.once('exit', releaseLock);
+const logs = mkdtempSync(join(artifacts, 'run-'));
+const controller = new AbortController();
+let interrupted;
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
+  interrupted = signal;
+  controller.abort();
+});
+const start = Date.now();
 const results = [];
-let buildFailed = false;
-
-for (const tier of TIER_ORDER) {
+const builds = [];
+const fmt = ms => `${(ms / 1000).toFixed(1)}s`;
+function logTail(path, count, label) {
+  let lines;
+  try { lines = readFileSync(path, 'utf8').replace(/\n$/, '').split('\n'); }
+  catch (error) { return `  (log unreadable: ${error.message})`; }
+  const tail = lines.slice(-count);
+  return [`----- ${label}: last ${tail.length} of ${lines.length} log lines -----`, ...tail, `----- end ${label} -----`].join('\n');
+}
+console.log(`Test logs: ${logs}`);
+for (const [tier, members] of Object.entries(TIERS)) {
   if (!selected.has(tier)) continue;
-  const { runner, build: needsBuild, tests } = TIERS[tier];
-
-  console.log(`\n########## tier: ${tier} (${tests.length} tests) ##########`);
-
-  if (needsBuild) {
-    if (!build()) {
-      // Mark every test in this tier as failed and skip running them.
-      buildFailed = true;
-      for (const name of tests) {
-        results.push({ tier, name, ok: false, duration: 0, note: 'build failed' });
-      }
-      continue;
+  const tests = members.filter(name => !options.filter || options.filter.has(name));
+  if (!tests.length) continue;
+  const jobs = serial || tier !== 'unit' ? 1 : options.jobs;
+  console.log(`\n${tier}: ${tests.length} tests, at most ${jobs} workers`);
+  const items = tests.map(name => ({
+    name,
+    exclusive: tier !== 'unit' || UNIT_EXCLUSIVE.has(name),
+  }));
+  const tierResults = await runQueue(items, jobs, async ({ name }) => {
+    console.log(`START [${tier}] ${name}`);
+    const timeoutMs = tier === 'unit' && UNIT_TIMEOUT_MS[name] ? UNIT_TIMEOUT_MS[name] : options['timeout-ms'];
+    const result = await runCommand({ command: tier === 'unit' ? 'bun' : 'node',
+      args: [join(TEST_DIR, `${name}.mjs`)], cwd: ROOT, name,
+      log: join(logs, `${tier}-${name}.log`), timeoutMs, signal: controller.signal });
+    console.log(`${result.outcome} [${tier}] ${name} ${fmt(result.duration)}${result.note ? ` — ${result.note}` : ''}`);
+    if (!['PASS', 'SKIP'].includes(result.outcome)) {
+      console.log(`  Log: ${result.log}`);
+      // CI keeps only the job output; one write keeps parallel workers from interleaving the tail.
+      if (options['log-tail']) console.log(logTail(result.log, options['log-tail'], `${tier}-${name}`));
     }
-  }
-
-  for (const name of tests) {
-    console.log(`\n--- [${tier}] ${name} ---`);
-    const r = runOne(runner, name);
-    results.push({ tier, ...r });
-  }
+    return result;
+  }, controller.signal);
+  results.push(...tierResults.map(r => ({ tier, ...r })));
 }
-
-// --- Summary ---
-
-const nameWidth = Math.max(...results.map((r) => r.name.length), 4);
-console.log('\n' + '='.repeat(nameWidth + 24));
-console.log('  SUMMARY');
-console.log('='.repeat(nameWidth + 24));
-
-let failed = 0;
-for (const r of results) {
-  const status = r.ok ? 'PASS' : 'FAIL';
-  if (!r.ok) failed++;
-  const dur = r.duration ? fmtDuration(r.duration) : '';
-  const note = r.note ? `  (${r.note})` : '';
-  console.log(`  ${status}  ${r.name.padEnd(nameWidth)}  ${dur.padStart(7)}${note}`);
-}
-
-console.log('='.repeat(nameWidth + 24));
-const total = results.length;
-console.log(`  ${total - failed}/${total} passed, ${failed} failed`);
-console.log('='.repeat(nameWidth + 24) + '\n');
-
-process.exit(failed > 0 || buildFailed ? 1 : 0);
+const duration = Date.now() - start;
+const counts = {};
+for (const r of results) counts[r.outcome] = (counts[r.outcome] || 0) + 1;
+writeFileSync(join(logs, 'summary.json'), JSON.stringify({ duration, counts, builds, results }, null, 2) + '\n');
+console.log(`\nSUMMARY: ${Object.entries(counts).map(([s, n]) => `${n} ${s}`).join(', ')}; wall time ${fmt(duration)}`);
+console.log(`Report: ${join(logs, 'summary.json')}`);
+process.exitCode = interrupted ? (interrupted === 'SIGINT' ? 130 : 143)
+  : results.some(r => !['PASS', 'SKIP'].includes(r.outcome)) ? 1 : 0;

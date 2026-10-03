@@ -1,0 +1,130 @@
+#!/usr/bin/env node
+for (const [key, value] of Object.entries(process.env)) { if (key.startsWith('PRAXIS_')) process.env[key.replace(/^PRAXIS_/, 'TREZI_')] ??= value }
+import { chatIslandShape, chatIslandDescription } from './chat-island-schema.mjs'
+import { previewToolShapes, previewToolText } from './preview-tool-schema.mjs'
+import { z } from 'zod'
+import { request } from 'node:http'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+
+const socketPath = process.env.TREZI_AGENT_TOOL_SOCKET
+const token = process.env.TREZI_AGENT_TOOL_TOKEN
+
+if (!socketPath || !token) {
+  process.stderr.write('Trezi agent tool bridge is not configured.\n')
+  process.exit(1)
+}
+
+const invoke = async (action, args) => {
+  const payload = JSON.stringify({ action, args })
+  const body = await new Promise((resolve, reject) => {
+    const req = request(
+      {
+        socketPath,
+        path: '/invoke',
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(payload)
+        },
+        timeout: 30_000
+      },
+      (response) => {
+        const chunks = []
+        response.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+        response.on('end', () => {
+          const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+          if (response.statusCode !== 200 || !parsed?.ok) {
+            reject(
+              new Error(parsed?.error || `Trezi tool bridge returned HTTP ${response.statusCode}.`)
+            )
+            return
+          }
+          resolve(parsed)
+        })
+      }
+    )
+    req.on('timeout', () => req.destroy(new Error('Trezi tool bridge timed out.')))
+    req.on('error', reject)
+    req.end(payload)
+  })
+  return body.result
+}
+
+const result = (value) => ({
+  content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+  structuredContent: value,
+  isError: !!value?.error
+})
+
+const server = new McpServer({ name: 'trezi', version: '1.0.0' })
+
+server.registerTool(
+  'workspace_state',
+  {
+    title: 'Trezi workspace state',
+    description:
+      'Inspect Trezi authoritative landing/worktree state for this chat. Call this whenever a merge, conflict, worktree, landing, or stale-preview issue is suspected; do not infer state from `git status` in the private worktree.'
+  },
+  async () => result(await invoke('workspace_state'))
+)
+
+server.registerTool(
+  'prepare_conflict_resolution',
+  {
+    title: 'Prepare Trezi conflict resolution',
+    description:
+      'Ask Trezi to safely combine the current live checkout with this chat’s parked changes inside this chat worktree. Call when workspace_state says `parked`. If files are returned, resolve every marker in them; the normal turn completion will ask Trezi to land the resolved result.'
+  },
+  async () => result(await invoke('prepare_conflict_resolution'))
+)
+
+server.registerTool('chat_island', { description: chatIslandDescription, inputSchema: chatIslandShape }, async (args) => result(await invoke('chat_island', args)))
+
+server.registerTool(
+  'open_code',
+  {
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    description: 'Open the mini code editor in the exact project file and highlight inclusive source lines. Read the file first; use when asked to show code or an implementation.',
+    inputSchema: { file: z.string(), startLine: z.number().int().min(1), endLine: z.number().int().min(1).optional() }
+  },
+  async (args) => result(await invoke('open_code', args))
+)
+
+server.registerTool(
+  'open_preview',
+  {
+    annotations: { destructiveHint: false, openWorldHint: false },
+    description: 'Open a project page in the user preview. Pass a root-relative path with optional query/hash. Navigation waits for this turn to land.',
+    inputSchema: { path: z.string() }
+  },
+  async (args) => result(await invoke('open_preview', args))
+)
+
+// Observation results already contain MCP content blocks. Preserve images as images.
+server.registerTool('preview_location', {
+  description: "Read the page/route currently shown in the user's live preview pane.",
+  inputSchema: {},
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+}, async () => invoke('preview_location'))
+// LKM-138: isolated-world inspection of the live preview (preview-tool-schema.mjs).
+for (const name of ['preview_screenshot', 'preview_inspect', 'preview_evaluate', 'preview_console', 'preview_viewport']) {
+  server.registerTool(name, {
+    description: previewToolText[name],
+    inputSchema: previewToolShapes[name],
+    annotations: { readOnlyHint: name !== 'preview_viewport', destructiveHint: false, openWorldHint: false }
+  }, async (args) => invoke(name, args))
+}
+
+server.registerTool('project_ui_catalog', {
+  description: 'Discover supported React and Svelte components, literal props and styles for UI composition. Requires Experimental Gen UI enabled.',
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+}, async () => result(await invoke('project_ui_catalog')))
+server.registerTool('compose_project_ui', {
+  description: 'Return project-component source: .tsx for React or .svelte for Svelte. Do not mix frameworks. For the current chat model provide file and spec. With Jev selected provide file, prompt and atomic candidates; Jev chooses the composition. Apply returned source with ordinary edit tools. Never silently fall back if Jev fails.',
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+  inputSchema: { file: z.string(), prompt: z.string().optional(), candidates: z.array(z.object({ id: z.string(), description: z.string(), element: z.object({ type: z.string(), props: z.record(z.string(), z.unknown()) }), root: z.boolean().optional(), resource: z.string().optional() })).optional(), spec: z.object({ root: z.string(), elements: z.record(z.string(), z.object({ type: z.string(), props: z.record(z.string(), z.unknown()), children: z.array(z.string()) }).strict()) }).strict().optional() }
+}, async (args) => result(await invoke('compose_project_ui', args)))
+
+await server.connect(new StdioServerTransport())

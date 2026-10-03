@@ -1,43 +1,39 @@
 /**
- * worktrees.ts unit test (pure — no Electron). The F1 crux: each comment-spawned
- * agent edits in its OWN git worktree so parallel runs never cross-write, the spawn
- * leaves a durable branch, and its diff applies back onto the live (possibly dirty)
- * working tree via 3-way patch — NOT `git merge` (which fails on uncommitted WIP).
+ * worktrees.ts through the Swift repository owner (run by test/repository-owner.mjs with
+ * the owner preloaded). The F1 crux: each comment-spawned agent edits in its OWN git
+ * worktree so parallel runs never cross-write, the spawn leaves a durable branch, and
+ * its change applies back onto the live (possibly dirty) working tree via 3-way patch —
+ * NOT `git merge` (which fails on uncommitted WIP).
  *
- * Asserts: captureBase returns a real sha snapshotting live WIP; create forks WIP
- * without touching the main tree; a custom branchName scheme (per-chat isolation)
- * lands on the expected branch; two concurrent creates are isolated; commit captures
- * the authoritative file list; diff→apply lands the change onto a DIRTY main tree;
- * remove reclaims the checkout (keeping the branch); pruneOrphans reclaims leftovers
- * and reports each as `{id, dirty, branch, repoRoot}` (dirty from `status --porcelain`,
- * not commit success; branch/repoRoot captured before removal) and FOLDS a parked
- * chat squash's recovery commit into one commit; pruneIntegratedChatBranches removes
- * only unattached/unparked chat refs whose patch already exists on live HEAD. Uses
- * real temp git repos.
+ * Asserts: the fork point snapshots live WIP; create forks WIP without touching the
+ * main tree; a custom branchName scheme (per-chat isolation) lands on the expected
+ * branch; two concurrent creates are isolated; commit captures the authoritative file
+ * list; the branch's change lands onto a DIRTY main tree; remove reclaims the checkout
+ * (keeping the branch); pruneOrphans reclaims leftovers and reports each as
+ * `{id, dirty, branch, repoRoot}` and FOLDS a parked chat squash's recovery commit into
+ * one commit; pruneIntegratedChatBranches removes only unattached/unparked chat refs
+ * whose patch already exists on live HEAD. Uses real temp git repos.
  *
- * Run with: bun run test:worktrees
+ * Run with: bun test/repository-owner.mjs
  */
 import {
   createWorktree,
   commitWorktree,
-  diffWorktree,
-  applyToWorkingTree,
+  applyBranchToWorkingTree,
   autoApplyWorktree,
   removeWorktree,
   branchPatch,
   pruneOrphans,
-  pruneIntegratedChatBranches,
-  captureBase
+  pruneIntegratedChatBranches
 } from '../src/main/worktrees.ts'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const base = mkdtempSync(join(tmpdir(), 'praxis-wt-'))
+const base = mkdtempSync(join(tmpdir(), 'trezi-wt-'))
 const repo = join(base, 'repo')
 const worktreesDir = join(base, 'worktrees')
-const tmpDir = join(base, 'tmp')
 let failed = 0
 const ok = (cond, msg) => {
   if (!cond) {
@@ -64,14 +60,14 @@ try {
 
   // Simulate the interactive main agent having UNCOMMITTED WIP in the live tree.
   writeFileSync(appFile, 'export const App = () => <div className="root">hi</div>\n// WIP\n')
-  // ...AND an UNTRACKED new file — the praxis agent constantly creates files; the fork
+  // ...AND an UNTRACKED new file — the trezi agent constantly creates files; the fork
   // base must include these (git stash create would silently drop them).
   writeFileSync(join(repo, 'Untracked.tsx'), 'export const New = () => null\n')
   const dirtyBefore = readFileSync(appFile, 'utf8')
 
   // --- create: forks the WIP, and does NOT disturb the main tree ---
   const wtA = await createWorktree(repo, worktreesDir, { label: 'make it blue' })
-  ok(wtA.branch === 'praxis/comment-' + wtA.id, `branch name: ${wtA.branch}`)
+  ok(wtA.branch === 'trezi/comment-' + wtA.id, `branch name: ${wtA.branch}`)
   ok(existsSync(wtA.path), 'worktree checkout exists')
   ok(readFileSync(appFile, 'utf8') === dirtyBefore, 'create did NOT touch the main working tree')
   // The worktree forked from the live WIP — tracked modification...
@@ -85,19 +81,18 @@ try {
     'worktree base includes UNTRACKED live files (new components the agent just made)'
   )
 
-  // --- captureBase is exported and returns a real commit sha off the live tree ---
-  const captured = await captureBase(repo, join(base, '.index-capturebase-test'))
-  ok(/^[0-9a-f]{40}$/.test(captured), `captureBase returns a sha: ${captured}`)
+  // --- the fork point is a real commit snapshotting the live tree ---
+  ok(/^[0-9a-f]{40}$/.test(wtA.baseSha), `the base is a sha: ${wtA.baseSha}`)
   ok(
-    g(repo, 'show', `${captured}:App.tsx`).includes('// WIP'),
-    'captureBase snapshot includes the live WIP'
+    g(repo, 'show', `${wtA.baseSha}:App.tsx`).includes('// WIP'),
+    'the base snapshot includes the live WIP'
   )
 
   // --- createWorktree honors a custom branchName scheme (per-chat isolation) ---
   const wtChat = await createWorktree(repo, worktreesDir, { branchName: (id) => `chat-${id}` })
   ok(
-    wtChat.branch === `praxis/chat-${wtChat.id}`,
-    `custom branchName lands on praxis/chat-<id>: ${wtChat.branch}`
+    wtChat.branch === `trezi/chat-${wtChat.id}`,
+    `custom branchName lands on trezi/chat-<id>: ${wtChat.branch}`
   )
   await removeWorktree(repo, wtChat, {})
 
@@ -121,10 +116,10 @@ try {
     'export const App = () => <div className="root accent">hi</div>\n// WIP\n'
   )
   writeFileSync(join(wtA.path, 'New.tsx'), 'export const New = () => null\n')
-  // A stray .praxis write (a spawn runs bypassPermissions, so the sidecar deny is off)
-  // must be excluded from the commit — the sidecar is praxis-managed, not the agent's.
-  mkdirSync(join(wtA.path, '.praxis'), { recursive: true })
-  writeFileSync(join(wtA.path, '.praxis', 'annotations.json'), '[{"sneaky":true}]\n')
+  // A stray .trezi write (a spawn runs bypassPermissions, so the sidecar deny is off)
+  // must be excluded from the commit — the sidecar is trezi-managed, not the agent's.
+  mkdirSync(join(wtA.path, '.trezi'), { recursive: true })
+  writeFileSync(join(wtA.path, '.trezi', 'annotations.json'), '[{"sneaky":true}]\n')
   const committed = await commitWorktree(wtA, 'make it blue')
   ok(committed.committed, 'commitWorktree committed')
   ok(
@@ -132,14 +127,14 @@ try {
     `committed files: ${JSON.stringify(committed.files)}`
   )
   ok(
-    !committed.files.some((f) => f.startsWith('.praxis')),
-    `.praxis must be excluded from a spawn commit: ${JSON.stringify(committed.files)}`
+    !committed.files.some((f) => f.startsWith('.trezi')),
+    `.trezi must be excluded from a spawn commit: ${JSON.stringify(committed.files)}`
   )
 
-  // --- diff → apply onto the DIRTY live tree (3-way, tolerates WIP) ---
-  const patch = await diffWorktree(wtA)
-  ok(/accent/.test(patch) && /New\.tsx/.test(patch), 'diff carries both changes')
-  const applied = await applyToWorkingTree(repo, patch, tmpDir)
+  // --- the branch's change → apply onto the DIRTY live tree (tolerates WIP) ---
+  const patch = await branchPatch(repo, wtA.branch)
+  ok(/accent/.test(patch) && /New\.tsx/.test(patch), 'the branch carries both changes')
+  const applied = await applyBranchToWorkingTree(repo, wtA.branch)
   ok(applied.ok && !applied.conflict, `apply onto dirty tree: ${JSON.stringify(applied)}`)
   const liveApp = readFileSync(appFile, 'utf8')
   ok(liveApp.includes('accent'), 'live App.tsx got the spawn edit')
@@ -206,12 +201,12 @@ try {
   ok(g(repo, 'show', `${orphan.branch}:Scratch.tsx`).includes('leftover'), 'orphan work recovered to its branch')
   await removeWorktree(repo, live, {})
 
-  // --- W2: a PARKED chat orphan (tip = cumulative praxis squash, a `chatpark-<id>` record
+  // --- W2: a PARKED chat orphan (tip = cumulative trezi squash, a `chatpark-<id>` record
   // exists) that crashed mid-turn must FOLD the recovery commit into that squash, so
   // branchPatch stays the full diff (a stacked recovery commit would hide the parked work
   // from the record's Apply). The fold is gated on the `isParked` predicate. ---
   const chatWt = await createWorktree(repo, worktreesDir, { branchName: (i) => `chat-${i}` })
-  // Turn 1 parked: the isolation layer squashes it into ONE praxis commit off base.
+  // Turn 1 parked: the isolation layer squashes it into ONE trezi commit off base.
   writeFileSync(join(chatWt.path, 'Parked.tsx'), 'export const P = () => null\n')
   const pc = await commitWorktree(chatWt, 'parked turn one')
   ok(pc.committed && pc.files.includes('Parked.tsx'), 'parked squash committed')
@@ -258,7 +253,7 @@ try {
   await removeWorktree(repo, mergedWt, { keepBranch: false })
 
   // --- Branch-only cleanup: a successful chat turn is usually NOT an ancestor of
-  // live HEAD. Praxis records the same patch as a separate live commit, so patch-id
+  // live HEAD. Trezi records the same patch as a separate live commit, so patch-id
   // equivalence must prune it; unique, parked, attached, and non-chat refs stay. ---
   const pruneRepo = join(base, 'prune-repo')
   mkdirSync(pruneRepo, { recursive: true })
@@ -306,20 +301,20 @@ try {
 
   const pruned = await pruneIntegratedChatBranches(pruneRepo, (id) => id === 'parked')
   ok(
-    pruned.deleted.includes('praxis/chat-integrated'),
+    pruned.deleted.includes('trezi/chat-integrated'),
     `patch-equivalent branch-only ref pruned: ${JSON.stringify(pruned)}`
   )
-  ok(!gp('branch', '--list', 'praxis/chat-integrated'), 'integrated chat branch no longer exists')
+  ok(!gp('branch', '--list', 'trezi/chat-integrated'), 'integrated chat branch no longer exists')
   ok(
-    gp('branch', '--list', 'praxis/chat-unique').includes('praxis/chat-unique'),
+    gp('branch', '--list', 'trezi/chat-unique').includes('trezi/chat-unique'),
     'unique chat work is preserved'
   )
   ok(
-    gp('branch', '--list', 'praxis/chat-parked').includes('praxis/chat-parked'),
+    gp('branch', '--list', 'trezi/chat-parked').includes('trezi/chat-parked'),
     'persisted parked branch is protected even when its patch is integrated'
   )
   ok(
-    gp('branch', '--list', 'praxis/chat-attached').includes('praxis/chat-attached'),
+    gp('branch', '--list', 'trezi/chat-attached').includes('trezi/chat-attached'),
     'a branch checked out in a live worktree is preserved'
   )
   ok(
@@ -329,10 +324,6 @@ try {
   await removeWorktree(pruneRepo, attachedWt, {})
   await removeWorktree(pruneRepo, uniqueWt, { keepBranch: false })
   await removeWorktree(pruneRepo, protectedWt, { keepBranch: false })
-
-  // --- empty patch applies as a no-op success ---
-  const noop = await applyToWorkingTree(repo, '', tmpDir)
-  ok(noop.ok && !noop.conflict, 'empty patch is a no-op success')
 
   // --- autoApplyWorktree: land a spawn's change straight on the live tree (v8 F1) ---
   // Fresh repo so the live README is unchanged since the worktree forked.
@@ -349,13 +340,13 @@ try {
   g2('add', '-A')
   g2('commit', '-qm', 'init')
   const wt2 = await createWorktree(repo2, worktreesDir, { label: 'edit readme' })
-  writeFileSync(join(wt2.path, 'README.md'), 'hello PRAXIS\n') // the "agent" edits in the worktree
+  writeFileSync(join(wt2.path, 'README.md'), 'hello TREZI\n') // the "agent" edits in the worktree
   const c2 = await commitWorktree(wt2, 'edit readme')
   const auto = await autoApplyWorktree(repo2, wt2, c2.files)
   ok(auto.applied, `autoApply should apply onto an unchanged live tree: ${JSON.stringify(auto)}`)
-  ok(readFileSync(join(repo2, 'README.md'), 'utf8') === 'hello PRAXIS\n', 'autoApply wrote the live file')
+  ok(readFileSync(join(repo2, 'README.md'), 'utf8') === 'hello TREZI\n', 'autoApply wrote the live file')
   ok(
-    auto.edits.length === 1 && auto.edits[0].before === 'hello world\n' && auto.edits[0].after === 'hello PRAXIS\n',
+    auto.edits.length === 1 && auto.edits[0].before === 'hello world\n' && auto.edits[0].after === 'hello TREZI\n',
     `autoApply returns before/after for the undo history: ${JSON.stringify(auto.edits)}`
   )
 

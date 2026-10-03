@@ -9,7 +9,7 @@
 
 // Cross-module contract: the panel injects sameCssValue as the comparator, so
 // resolution must survive '#6c6c6c' ⇄ 'rgb(108, 108, 108)'.
-import { sameCssValue } from '../src/renderer/src/lib/css-values.ts'
+import { sameCssValue } from '../src/shared/css-values.ts'
 import {
   customPropertyNames,
   groupRole,

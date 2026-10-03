@@ -1,3 +1,4 @@
+import { observePreview } from './preview-evidence'
 /**
  * Every ipcMain handler that talks to (or about) the native preview: its
  * geometry, its lifecycle, the select/comment/annotate relays, the floating
@@ -6,17 +7,17 @@
  * Split out of index.ts, which owns the WINDOWS and the VIEWS — this module owns
  * none of them. It reaches the views and the shared preview flags through the
  * `PreviewIpcHost` it is handed, so index.ts stays the single place a
- * WebContentsView is created, raised, hidden or destroyed.
+ * NativeView is created, raised, hidden or destroyed.
  *
  * Trust: the preview hosts the user's project — untrusted content. Every message
- * arriving on a `praxis:preview:*` / `layers:*` channel is therefore checked
+ * arriving on a `trezi:preview:*` / `layers:*` channel is therefore checked
  * against the preview's own webContents before it's believed, and every message
- * that drives the preview is checked to have come from the main renderer or the
- * panel island (never from the preview itself).
+ * that drives the preview is checked to have come from the trusted native service target (never from the preview itself).
  */
-import { ipcMain, type WebContentsView } from 'electron'
+import { ipcMain, type NativeView, type NativeWebContents, type NativeIpcEvent } from '../native/platform'
 import type { MoveNodeRequest, SelectedElement, StyleReadResult } from '../shared/api'
 import {
+  ANIMATION_REPLAY,
   LAYERS_CHANGED,
   LAYERS_HOVER,
   LAYERS_READ,
@@ -64,7 +65,6 @@ export interface PreviewState {
   /** Renderer's last-reported preview slot rect, in CSS pixels (== DIP). */
   bounds: { x: number; y: number; width: number; height: number; radius: number }
   /** Renderer asked the view hidden beneath a freeze-frame overlay. */
-  hiddenByRenderer: boolean
   selectMode: boolean
   commentMode: 'comment' | 'annotate' | null
   frameMode: boolean
@@ -77,11 +77,9 @@ export interface PreviewState {
 export interface PreviewIpcHost {
   state: PreviewState
   /** Creates the preview view on first use; index.ts owns its wiring. */
-  ensurePreviewView: () => WebContentsView
-  getPreviewView: () => WebContentsView | null
-  ensurePanelView: () => WebContentsView
-  getPanelView: () => WebContentsView | null
-  getMainWindow: () => Electron.BrowserWindow | null
+  ensurePreviewView: () => NativeView
+  getPreviewView: () => NativeView | null
+  getMainWindow: () => NativeView | null
   /** Send to the main renderer, guarded against a destroyed webContents. */
   sendToMain: (channel: string, ...args: unknown[]) => void
   isLocalPreviewUrl: (url: string) => boolean
@@ -106,7 +104,7 @@ function requestReply<T>(opts: {
   reply: string
   timeoutMs: number
   /** Late-bound: the view is created on demand and replaced when the window is. */
-  getView: () => WebContentsView | null
+  getView: () => NativeView | null
   /** Map a reply payload to the resolved value (null = nothing usable). */
   parse: (payload: Record<string, unknown>) => T | null
 }): (payload?: Record<string, unknown>) => Promise<T | null> {
@@ -141,13 +139,13 @@ function requestReply<T>(opts: {
 
 export function registerPreviewIpc(host: PreviewIpcHost): void {
   const { state, sendToMain } = host
-  const previewWc = (): Electron.WebContents | undefined => host.getPreviewView()?.webContents
+  const previewWc = (): NativeWebContents | undefined => host.getPreviewView()?.webContents
   /** Push to the preview's preload (no-op when there's no preview yet). */
   const toPreview = (channel: string, ...args: unknown[]): void => {
     previewWc()?.send(channel, ...args)
   }
   /** Did this really come from the previewed page, and not some other view? */
-  const fromPreview = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean =>
+  const fromPreview = (e: NativeIpcEvent): boolean =>
     e.sender === previewWc()
 
   // Let the in-process agent tools (backends/claude.ts) observe the user's live
@@ -159,8 +157,18 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
       const url = previewWc()?.getURL()
       return url && /^https?:/.test(url) ? url : null
     },
-    capture: async () => (await previewWc()?.capturePage()) ?? null
+    capture: async () => (await previewWc()?.capturePage()) ?? null,
+    agent: {
+      evaluate: (code, world, timeoutMs) => openPreview().evaluateIn(code, world, timeoutMs),
+      captureRect: (rect) => openPreview().captureRect(rect),
+      setViewport: (width) => openPreview().setViewport(width)
+    }
   })
+  function openPreview(): NativeWebContents {
+    const wc = previewWc()
+    if (!wc || wc.isDestroyed() || !/^https?:/.test(wc.getURL())) throw new Error('No project preview is open.')
+    return wc
+  }
 
   // Apply the renderer's slot rect (PreviewPane already lays out around the
   // floating prop panel's strip, viewport-aware).
@@ -206,12 +214,7 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
     state.url = url
     state.retries = 0
     const view = host.ensurePreviewView()
-    // Recover from any LEAKED hide (a renderer bug) — a fresh load should be
-    // visible. But an ACTIVE hide (state.hiddenByRenderer: the review modal /
-    // a dropdown's freeze-frame is up) must win, or a load completing under it
-    // pops the native view over the open overlay; set-dragging(false) restores
-    // visibility when the overlay closes.
-    if (!state.hiddenByRenderer) view.setVisible(true)
+    view.setVisible(true)
     view.webContents.loadURL(url)
   })
 
@@ -228,34 +231,6 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
     state.layersWatch = false
     state.pins = []
     host.ensurePreviewView().webContents.loadURL(host.placeholderUrl)
-  })
-
-  // Hide the native view beneath a renderer freeze-frame overlay; remember the
-  // intent so preview:load respects it.
-  ipcMain.on('preview:set-dragging', (_e, active: boolean) => {
-    state.hiddenByRenderer = active
-    host.getPreviewView()?.setVisible(!active)
-  })
-
-  // Freeze-frame support: snapshot the live preview so renderer UI (e.g. the
-  // branch dropdown) can overlay a pixel-identical <img> while the native view
-  // hides beneath it — the preview appears to stay put, but the DOM wins.
-  ipcMain.handle('preview:capture', async (): Promise<string | null> => {
-    const wc = previewWc()
-    let readoutStyle: string | undefined
-    try {
-      // The renderer owns the size label over snapshots. Avoid baking a stale
-      // label into the image if the preview resizes while an overlay is open.
-      readoutStyle = await wc?.insertCSS('[data-praxis-viewport-size] { display: none !important; }')
-      const img = await wc?.capturePage()
-      return img && !img.isEmpty() ? img.toDataURL() : null
-    } catch {
-      return null
-    } finally {
-      if (readoutStyle && wc && !wc.isDestroyed()) {
-        await wc.removeInsertedCSS(readoutStyle).catch(() => {})
-      }
-    }
   })
 
   // v2 select mode: renderer → preview (arm/disarm the overlay).
@@ -301,65 +276,23 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
     toPreview(PREVIEW_SET_STATUS, state.statusText)
   })
 
-  // ── Floating prop-panel plumbing (renderer ⇄ panel view, via main) ──────────
-  let panelState: unknown = null
-  const fromMainWindow = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean =>
+  // Native inspectors send through the trusted application service target.
+  const fromMainWindow = (e: NativeIpcEvent): boolean =>
     e.sender === host.getMainWindow()?.webContents
-  const fromPanel = (e: Electron.IpcMainEvent): boolean =>
-    e.sender === host.getPanelView()?.webContents
-  ipcMain.on('panel:show', (e, b: { x: number; y: number; width: number; height: number }) => {
-    if (!fromMainWindow(e)) return
-    const v = host.ensurePanelView()
-    v.setBounds({
-      x: Math.round(b.x),
-      y: Math.round(b.y),
-      width: Math.max(0, Math.round(b.width)),
-      height: Math.max(0, Math.round(b.height))
-    })
-    v.setVisible(true)
-  })
-  ipcMain.on('panel:hide', (e) => {
-    if (!fromMainWindow(e)) return
-    host.getPanelView()?.setVisible(false)
-  })
-  ipcMain.on('panel:state', (e, s: unknown) => {
-    if (!fromMainWindow(e)) return
-    panelState = s
-    host.getPanelView()?.webContents.send('panel:state', s)
-  })
-  // Island → "I'm listening, send me what you have". The first setState always
-  // predates the view (show creates it), so without this pull the island's very
-  // first render would have nothing to draw. Same channel as the pushes, so the
-  // reply can never overtake a newer state.
-  ipcMain.on('panel:request-state', (e) => {
-    if (!fromPanel(e)) return
-    if (panelState) e.sender.send('panel:state', panelState)
-  })
-  // Panel → main renderer: user actions (close/dock/seed/…) and content height.
-  ipcMain.on('panel:action', (e, action: unknown) => {
-    if (!fromPanel(e)) return
-    sendToMain('panel:action', action)
-  })
-  ipcMain.on('panel:size', (e, size: { width: number; height: number }) => {
-    if (!fromPanel(e)) return
-    sendToMain('panel:size', size)
-  })
-
-  // ── Styles tab: live-injection relays + computed-style reads (v10) ──────────
-  // The style controls live in the island (panelView), but the main renderer may
-  // also drive them — accept either sender, relay into the preview's preload.
-  const fromMainOrPanel = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean =>
-    fromMainWindow(e) || e.sender === host.getPanelView()?.webContents
   ipcMain.on('styles:preview', (e, p: { prop: string; value: string }) => {
-    if (!fromMainOrPanel(e)) return
+    if (!fromMainWindow(e)) return
     toPreview(STYLES_PREVIEW, p)
   })
   ipcMain.on('styles:clear-preview', (e, p?: { prop?: string }) => {
-    if (!fromMainOrPanel(e)) return
+    if (!fromMainWindow(e)) return
     toPreview(STYLES_CLEAR_PREVIEW, p)
   })
+  ipcMain.on('preview:animation-replay', (e, component: unknown) => {
+    if (!fromMainWindow(e) || typeof component !== 'string' || component.length > 80) return
+    toPreview(ANIMATION_REPLAY, component)
+  })
   ipcMain.on('styles:replay', (e, p: { prop: string; from: string; to: string }) => {
-    if (!fromMainOrPanel(e)) return
+    if (!fromMainWindow(e)) return
     toPreview(STYLES_REPLAY, p)
   })
 
@@ -384,7 +317,7 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
     }
   })
   ipcMain.handle('styles:read', (e, props: string[]): Promise<StyleReadResult | null> | null => {
-    if (!fromMainOrPanel(e) || !host.getPreviewView() || !Array.isArray(props)) return null
+    if (!fromMainWindow(e) || !host.getPreviewView() || !Array.isArray(props)) return null
     return readStyles({ props })
   })
 
@@ -399,8 +332,9 @@ export function registerPreviewIpc(host: PreviewIpcHost): void {
   })
 
   // Readiness probe (stamp count) → renderer, to drive the setup offer.
-  ipcMain.on(PREVIEW_READINESS, (e, info: { stamps: number }) => {
+  ipcMain.on(PREVIEW_READINESS, (e, info: { stamps: number; url?: string; documentStartedAt?: number }) => {
     if (!fromPreview(e)) return
+    observePreview({ ...info, url: e.sender.getURL() })
     sendToMain('preview:readiness', info)
   })
 

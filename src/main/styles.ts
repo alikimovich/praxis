@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { renderJsxAttribute } from './jsx-attribute-literals'
+import { ipcMain } from '../native/platform'
 import { readFile } from 'fs/promises'
 import type { PropEditResult, StyleEdit, StyleEditResult } from '../shared/api'
 import { STYLE_PROPS as STYLE_PROP_LIST } from '../shared/style-props'
@@ -17,7 +18,7 @@ import { applyStyleEditSvelte } from './styles-svelte'
  *    `className` is a literal string → rewrite the single family-matching class
  *    (`p-4` → `p-[13px]`) and splice the new string.
  *  - S2 inline — no/ambiguous utility path → merge into an EXISTING JSX
- *    `style={{…}}` literal. Praxis never ADDS a style attribute that wasn't
+ *    `style={{…}}` literal. Trezi never ADDS a style attribute that wasn't
  *    there: a project styling from a stylesheet/CSS module shouldn't silently
  *    grow inline styles because someone scrubbed a value, so an absent
  *    attribute is S3's problem, not something to invent a convention for.
@@ -46,8 +47,8 @@ export const STYLE_PROPS: ReadonlySet<string> = new Set(STYLE_PROP_LIST)
  * declaration, escape a style object, or break attribute quoting. Inside parens
  * (`cubic-bezier(…)`, `var(…)`) commas and dots are business as usual.
  */
-export function isSafeStyleValue(value: string): boolean {
-  if (!value.trim() || value.length > 200) return false
+export function isSafeStyleValue(value: string, maxLength = 200): boolean {
+  if (!value.trim() || value.length > maxLength) return false
   let depth = 0
   for (let i = 0; i < value.length; i++) {
     const ch = value[i]
@@ -123,7 +124,7 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
   if (!STYLE_PROPS.has(edit.prop)) {
     return { applied: false, error: 'Unsupported style property.' }
   }
-  if (typeof edit.value !== 'string' || !isSafeStyleValue(edit.value)) {
+  if (typeof edit.value !== 'string' || !isSafeStyleValue(edit.value, edit.prop === 'box-shadow' ? 1024 : 200)) {
     return { applied: false, error: 'Invalid style value.' }
   }
   const loc = resolveSource(root, edit.source)
@@ -184,7 +185,10 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
       const rewritten = tokenClassRewrite(current, edit, token)
       if (rewritten != null) {
         const next =
-          code.slice(0, strNode.start) + JSON.stringify(rewritten) + code.slice(strNode.end)
+          code.slice(0, strNode.start) +
+          (classAttr?.value?.type === 'StringLiteral'
+            ? renderJsxAttribute(rewritten, code[strNode.start]) : JSON.stringify(rewritten)) +
+          code.slice(strNode.end)
         return committed(
           await commitEdit(root, loc.file, code, next, key, edit.group),
           'tailwind',
@@ -200,7 +204,7 @@ export async function applyStyleEdit(root: string, edit: StyleEdit): Promise<Sty
   const styleAttr = (found.opening.attributes ?? []).find(
     (a) => a.type === 'JSXAttribute' && (a.name as { name?: string })?.name === 'style'
   )
-  // Nothing to extend. Adding `style={{…}}` here would be Praxis choosing a
+  // Nothing to extend. Adding `style={{…}}` here would be Trezi choosing a
   // styling convention on the project's behalf — the one thing a design tool
   // editing someone else's repo must not do. The agent gets it instead, and its
   // prompt explicitly forbids reaching for the inline prop.

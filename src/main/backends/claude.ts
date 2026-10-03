@@ -1,9 +1,12 @@
-import { createHash } from 'node:crypto'
+import { chatIslandShape, chatIslandDescription } from '../../../bin/chat-island-schema.mjs'
+import { previewToolShapes as previewShapes, previewToolText as PREVIEW_TOOL_TEXT } from '../../../bin/preview-tool-schema.mjs'
+import { runTreziTool, sessionTool } from '../session-tools'
+import type { PreviewObserver } from '../preview-observation-tools'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import type { BrowserWindow } from 'electron'
+import type { NativeView } from '../../native/platform'
 import { z } from 'zod'
 import type {
   AgentEvent,
@@ -17,19 +20,27 @@ import type {
   SlashCommandItem
 } from '../../shared/api'
 import { projectKey } from '../../shared/projectKey'
-import { addUsage, emptyUsage, isEmptyUsage, readUsage, usageDelta } from '../../shared/run-stats'
 import { checkContrast, suggestAccessible } from '../apca'
-import { lexLiteral, locateAnchor, validateManifest } from '../control-manifest'
-import { saveManifest } from '../control-panels'
 import { fluidClamp, fluidScale } from '../fluid'
 import { recordClaudeModels } from '../model-catalog'
 import { oklchScale } from '../oklch'
-import { capturePreview, getPreviewUrl } from '../preview-state'
-import { praxisRules } from '../rules'
+import { discoverPortableSkills } from '../bundled-skills'
+import { withSkillReferences } from './skill-menu'
+import { claudeIsolationOptions } from './claude-isolation'
+import {
+  checkClaudeLogin,
+  claudeCliChoice,
+  forgetClaudeCli,
+  isAuthFailure,
+  isLoginCommand,
+  LOGIN_COMMAND_MESSAGE,
+  resolveClaudeCli
+} from './claude-login'
+import { liveCheckoutEdit } from '../live-write-guard'
+import { treziRules } from '../rules'
 import { elevationScale, layeredShadow } from '../shadows'
-import { findPack, SKILL_PACKS } from '../skill-packs'
+import { SKILL_PACKS } from '../skill-packs'
 import { discoverProjectSkills, mergeSlashCommands } from '../skills'
-import { installSkillPack } from '../skills-install'
 import {
   analyze,
   fromBounceDuration,
@@ -45,8 +56,11 @@ import { letterSpacing, lineHeight } from '../type-metrics'
 import { interruptWithEscalation } from './interrupt'
 import { parseProjectMemoryEvaluation, projectMemoryEvaluationPrompt } from './memory'
 import { createRecordCapture } from './record'
+import { streamedChars, streamUsage } from './stream-usage'
 import { sanitizeTitle, transcriptDigest } from './title'
-import { AUTO_ALLOW_TOOLS, describeTool, sendToRenderer, toolDetail, touchesSidecar } from './tools'
+import { describeTool, sendToRenderer, toolDetail } from './tools'
+import { providerOwner } from '../provider-owner'
+import { INTERRUPT_GRACE_MS, type PermissionVerdict, decidePermission, permissionTarget } from '../provider-policy'
 import type {
   ModelProvider,
   PendingPrompt,
@@ -55,106 +69,52 @@ import type {
   SpawnContext
 } from './types'
 
-// The bundled Praxis agent plugin (skills teaching the preview workflow). Lives
+// The bundled Trezi agent plugin (skills teaching the preview workflow). Lives
 // at the repo root; resolved relative to the compiled main (out/main →
 // ../../agent-plugin), the same walk as index.ts's appIcon. Only wired in when
 // present so a stripped build degrades gracefully instead of erroring.
 const PLUGIN_PATH = join(__dirname, '../../agent-plugin')
 
-/**
- * How long Stop waits for the SDK's graceful `interrupt()` before killing the
- * query outright. Generous enough that a merely BUSY subprocess (mid tool call,
- * flushing a long response) still gets to stop cleanly and keep its session, but
- * short enough that a wedged one doesn't leave the user staring at a dead button.
- */
-const INTERRUPT_GRACE_MS = 3_000
-
-// The two in-process `praxis` MCP tools, fully-qualified (mcp__<server>__<tool>).
+// The two in-process `trezi` MCP tools, fully-qualified (mcp__<server>__<tool>).
 // Read-only observers of the user's preview — auto-allowed so they never prompt.
 const PREVIEW_TOOL_NAMES = new Set([
-  'mcp__praxis__preview_location',
-  'mcp__praxis__preview_screenshot'
+  'mcp__trezi__preview_location',
+  'mcp__trezi__preview_screenshot',
+  // LKM-138: isolated-world inspection; evaluate is read-only and bounded, and a
+  // viewport change is temporary and restores itself.
+  'mcp__trezi__preview_inspect',
+  'mcp__trezi__preview_evaluate',
+  'mcp__trezi__preview_console',
+  'mcp__trezi__preview_viewport'
 ])
-// All in-process `praxis` tools — the observers above plus `define_controls`
-// (v10 Custom Controls). define_controls DOES persist state, but only through
-// main's own validated `saveManifest` path (main stays the sole `.praxis/`
-// writer), so it's equally safe to auto-allow: allowedTools + the canUseTool
-// short-circuit both use this set.
-const PRAXIS_TOOL_NAMES = new Set([
+// Validated in-process tools are auto-allowed by both allowedTools and
+// canUseTool. Chat islands persist through the island service; main remains
+// the sole writer of app state under `.trezi/`.
+const TREZI_TOOL_NAMES = new Set([
   ...PREVIEW_TOOL_NAMES,
-  'mcp__praxis__define_controls',
+  'mcp__trezi__chat_island',
+  'mcp__trezi__open_code',
+  'mcp__trezi__open_preview',
+  'mcp__trezi__project_ui_catalog',
+  'mcp__trezi__compose_project_ui',
   // Pure, deterministic spring→CSS calculator. No state, no side effects, so
   // it's auto-allowed like the observers — it never touches disk or the repo.
-  'mcp__praxis__spring_to_css',
+  'mcp__trezi__spring_to_css',
   // APCA accessible-contrast checker + color suggester. Also pure (reads no repo
   // state, writes nothing) — auto-allowed for the same reason.
-  'mcp__praxis__check_contrast',
+  'mcp__trezi__check_contrast',
   // Design-system calculators (fluid clamp() sizing, OKLCH color ramps, layered
   // shadows, size-aware line-height). All pure math — no state, no disk — so
   // auto-allowed like the rest.
-  'mcp__praxis__fluid_clamp',
-  'mcp__praxis__color_scale',
-  'mcp__praxis__layered_shadow',
-  'mcp__praxis__line_height',
+  'mcp__trezi__fluid_clamp',
+  'mcp__trezi__color_scale',
+  'mcp__trezi__layered_shadow',
+  'mcp__trezi__line_height',
   // Lists the curated skill-pack catalog — pure/read-only (no install, no
   // network), so auto-allowed. Its sibling `install_skills` is deliberately NOT
   // here: it writes files + hits the network, so it must surface a permission card.
-  'mcp__praxis__list_recommended_skills'
+  'mcp__trezi__list_recommended_skills'
 ])
-
-// `define_controls` input — ControlPanelManifest minus `id`/`createdAt` (main
-// assigns those). The SDK converts this zod shape to JSON Schema over MCP, so
-// the model sees the exact manifest schema without any prompt bloat. Structural
-// security limits live in validateManifest (control-manifest.ts) — the shape
-// here stays permissive-but-typed and every input re-runs the real validator.
-const defineControlsShape = {
-  manifest: z.object({
-    file: z.string().describe('Repo-relative path of the source file the params live in'),
-    component: z.string().describe('The component the panel targets (its exported name)'),
-    title: z.string().describe('Panel heading shown to the user (≤80 chars)'),
-    params: z
-      .array(
-        z.object({
-          id: z.string().describe('Stable id, unique in the panel: ^[a-z0-9][a-z0-9-]{0,40}$'),
-          label: z.string().describe('Human label rendered next to the control (≤80 chars)'),
-          kind: z.enum(['number', 'color', 'select', 'toggle', 'text', 'bezier']),
-          unit: z.string().optional().describe("Display unit for kind 'number', e.g. 'px' | 'ms'"),
-          min: z.number().optional().describe("Clamp minimum (kind 'number' only)"),
-          max: z.number().optional().describe("Clamp maximum (kind 'number' only)"),
-          step: z.number().optional().describe("Scrub increment (kind 'number' only)"),
-          options: z
-            .array(z.string())
-            .optional()
-            .describe("Allowed values (kind 'select' only, 1-20 entries)"),
-          apply: z
-            .discriminatedUnion('strategy', [
-              z.object({
-                strategy: z.literal('prop'),
-                propName: z.string().describe('Component prop to edit (per-instance values)')
-              }),
-              z.object({
-                strategy: z.literal('style'),
-                styleProp: z
-                  .string()
-                  .describe("CSS longhand routed through the Styles engine, e.g. 'border-radius'")
-              }),
-              z.object({
-                strategy: z.literal('literal'),
-                anchor: z
-                  .string()
-                  .describe(
-                    'Unique substring of the file (4-200 chars) ending immediately before the ' +
-                      "literal to edit — ideal shape: 'const STAGGER_MS = '. Must occur exactly once."
-                  )
-              })
-            ])
-            .describe('How the param writes back to source')
-        })
-      )
-      .min(1)
-      .max(12)
-  })
-}
 
 // `spring_to_css` input — three interchangeable ways to describe the spring
 // (physical, ζ/frequency, or Framer-style bounce/duration) plus a preset shortcut
@@ -426,17 +386,6 @@ const lineHeightShape = {
 
 /** Panel id assigned by main: component slug + a short hash of file+component,
  *  matching validateManifest's `^[a-z0-9][a-z0-9-]{0,40}$` by construction. */
-function panelId(file: string, component: string): string {
-  const slug =
-    component
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 32) || 'panel'
-  const hash = createHash('sha1').update(`${file}:${component}`).digest('hex').slice(0, 6)
-  return `${slug}-${hash}`
-}
-
 // The Agent SDK is ESM-only; this CJS main bundle must reach it via a dynamic
 // import() (preserved by Rollup for external deps) rather than a static require.
 type SdkModule = typeof import('@anthropic-ai/claude-agent-sdk')
@@ -544,7 +493,7 @@ function parseQuestions(input: unknown): QuestionSpec[] {
  * Feed the user's picks back to the model as the AskUserQuestion tool result. We
  * DENY the tool with the answer as its message: in headless SDK mode there is no
  * built-in interactive prompt to run, so intercepting `canUseTool` and returning
- * the answer here keeps the whole exchange under praxis's control. The message is
+ * the answer here keeps the whole exchange under trezi's control. The message is
  * phrased as an answer so the model continues with the user's choice in hand.
  */
 function formatAnswers(questions: QuestionSpec[], answers: QuestionAnswers): string {
@@ -565,7 +514,7 @@ function formatAnswers(questions: QuestionSpec[], answers: QuestionAnswers): str
 async function startSession(
   root: string,
   options: AgentOptions,
-  getWindow: () => BrowserWindow | null,
+  getWindow: () => NativeView | null,
   ctx?: SpawnContext
 ): Promise<ProviderSession> {
   const key = projectKey(root)
@@ -605,128 +554,109 @@ async function startSession(
     sendToRenderer(getWindow, 'agent:event', tagged)
   }
 
-  // In-process SDK MCP server bundling Praxis's own agent tools: read-only views
-  // of the user's live preview (the native WebContentsView that index.ts owns,
+  // In-process SDK MCP server bundling Trezi's own agent tools: read-only views
+  // of the user's live preview (the native NativeView that index.ts owns,
   // reached via the preview-state registry) which OBSERVE what the user sees
   // (agent-browser is the agent's own headless copy for interaction),
-  // define_controls (v10 Custom Controls), a family of pure design-system
+  // chat_island, a family of pure design-system
   // calculators — spring_to_css, check_contrast, fluid_clamp, color_scale,
   // layered_shadow, line_height — and the skill-pack tools (list_recommended_skills
   // pure; install_skills side-effecting). The observers, calculators and
   // list_recommended_skills are auto-allowed (see allowedTools + canUseTool) so they
-  // never prompt — all are side-effect-free, and define_controls persists only
-  // through main's validated saveManifest path. install_skills is NOT auto-allowed:
+  // never prompt — all are side-effect-free, and chat_island persists only
+  // through the validated chat-island service. install_skills is NOT auto-allowed:
   // it writes files + hits the network, so it surfaces a normal permission card.
+  // Every Trezi tool call is authorized by the provider owner against this session's
+  // grant before it runs (S10): a background edit is not granted the editor or islands,
+  // a closed session nothing, and oversized arguments are refused.
+  const guarded = <T extends { name: string; handler: (...a: any[]) => Promise<any> }>(defs: T[]): T[] =>
+    defs.map((def) => ({
+      ...def,
+      handler: async (args: unknown, extra: unknown) => {
+        if (ctx?.grant) {
+          try {
+            await providerOwner().authorize(ctx.grant, def.name, args)
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            return { content: [{ type: 'text' as const, text: JSON.stringify({ error: message }) }], isError: true }
+          }
+        }
+        return def.handler(args, extra)
+      }
+    }))
+  // The tools that need main's state (the preview, islands, the editor, Gen UI, skill
+  // installs) run in Bun: from a provider helper they go there through the owner, which
+  // checks the helper's grant (`sessionTool`, LKM-131); in Bun they run here.
+  const scope = {
+    root, liveRoot: ctx?.liveRoot ?? root, emitKey, background: !!ctx?.sessionId, connectionId: options.connectionId,
+    notify: (channel: string, payload: unknown): void => sendToRenderer(getWindow, channel, payload)
+  }
+  const treziTool = sessionTool(ctx?.tools, (action, args) => runTreziTool(action, args, scope))
+  const failed = (result: unknown): boolean => !!(result as { error?: unknown } | null)?.error
+  const asText = async (pending: Promise<unknown>) => {
+    const result = await pending
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], ...(failed(result) ? { isError: true } : {}) }
+  }
+  // The preview observers already answer as MCP content (text or a JPEG); a failure is text.
+  const observed = async (action: PreviewObserver, args: unknown = {}) => {
+    const result = (await treziTool(action, args)) as { content?: unknown } | null
+    return Array.isArray(result?.content) ? (result as { content: never[] }) : asText(Promise.resolve(result))
+  }
   const previewServer = createSdkMcpServer({
-    name: 'praxis',
+    name: 'trezi',
     version: '1.0.0',
-    tools: [
+    tools: guarded([
+      tool(
+        'project_ui_catalog',
+        'Discover supported React and Svelte components, literal props and styles for UI composition. Requires Experimental Gen UI enabled.',
+        {},
+        async () => asText(treziTool('project_ui_catalog', {}))
+      ),
+      tool(
+        'compose_project_ui',
+        'Return project-component source: .tsx for React or .svelte for Svelte. Do not mix frameworks. For the current chat model provide file and spec. With Jev selected provide file, prompt and atomic candidates; Jev chooses the composition. Apply returned source with ordinary edit tools. Never silently fall back if Jev fails.',
+        {
+          file: z.string(),
+          prompt: z.string().optional(),
+          candidates: z.array(z.object({ id: z.string(), description: z.string(), element: z.object({ type: z.string(), props: z.record(z.string(), z.unknown()) }), root: z.boolean().optional(), resource: z.string().optional() })).optional(),
+          spec: z.object({
+            root: z.string(),
+            elements: z.record(z.string(), z.object({
+              type: z.string(), props: z.record(z.string(), z.unknown()), children: z.array(z.string())
+            }).strict())
+          }).strict().optional()
+        },
+        async (args) => asText(treziTool('compose_project_ui', args))
+      ),
       tool(
         'preview_location',
         "The page/route currently shown in the user's live preview pane.",
         {},
-        async () => {
-          const url = getPreviewUrl()
-          if (!url) return { content: [{ type: 'text', text: 'No project preview is open.' }] }
-          let text = `The preview is currently showing ${url}.`
-          try {
-            const u = new URL(url)
-            text += ` (path: ${u.pathname}${u.search}${u.hash})`
-          } catch {
-            /* non-parseable URL — the full string above is enough */
-          }
-          return { content: [{ type: 'text', text }] }
-        }
+        async () => observed('preview_location')
       ),
       tool(
         'preview_screenshot',
-        'A screenshot of exactly what the user sees in their preview pane right now (their route, viewport, simulator included).',
-        {},
-        async () => {
-          const img = await capturePreview()
-          if (!img || img.isEmpty()) {
-            return { content: [{ type: 'text', text: 'No project preview is open.' }] }
-          }
-          // Downscale like feedback.ts's captureWindow so the base64 payload
-          // stays reasonable; 1200px keeps UI legible for verification.
-          const { width } = img.getSize()
-          const scaled = width > 1200 ? img.resize({ width: 1200 }) : img
-          const jpeg = scaled.toJPEG(70)
-          return {
-            content: [{ type: 'image', data: jpeg.toString('base64'), mimeType: 'image/jpeg' }]
-          }
-        }
+        PREVIEW_TOOL_TEXT.preview_screenshot,
+        previewShapes.preview_screenshot,
+        async (args) => observed('preview_screenshot', args)
       ),
-      // v10 Custom Controls: register an AI-surfaced control panel. The manifest
-      // is UNTRUSTED — main re-validates structure, checks every literal anchor
-      // against the file the agent just wrote (this session's cwd, which may be
-      // a per-chat worktree), and persists to the LIVE root (ctx.liveRoot) so
-      // the panel isn't stranded when the worktree merges/drops. Failures come
-      // back as tool-result text (never a throw) so the model can fix + retry.
+      tool('preview_inspect', PREVIEW_TOOL_TEXT.preview_inspect, previewShapes.preview_inspect, async (args) => observed('preview_inspect', args)),
+      tool('preview_evaluate', PREVIEW_TOOL_TEXT.preview_evaluate, previewShapes.preview_evaluate, async (args) => observed('preview_evaluate', args)),
+      tool('preview_console', PREVIEW_TOOL_TEXT.preview_console, previewShapes.preview_console, async (args) => observed('preview_console', args)),
+      tool('preview_viewport', PREVIEW_TOOL_TEXT.preview_viewport, previewShapes.preview_viewport, async (args) => observed('preview_viewport', args)),
       tool(
-        'define_controls',
-        'Register a control panel of tweakable parameters (sliders, color pickers, toggles) ' +
-          'for a component, after instrumenting its source so each parameter is a clean ' +
-          'target: a named top-level constant in the component file (literal strategy), a ' +
-          'typed prop with a literal default (prop strategy), or a CSS property (style ' +
-          'strategy). The user tweaks these live in the Praxis island.',
-        defineControlsShape,
-        async (args) => {
-          const fail = (text: string) => ({
-            content: [{ type: 'text' as const, text: `define_controls failed: ${text}` }],
-            isError: true
-          })
-          const input = args.manifest
-          // Main assigns identity; the model never picks ids or timestamps.
-          const manifest = validateManifest({
-            ...input,
-            id: panelId(input.file, input.component),
-            createdAt: new Date().toISOString()
-          })
-          if ('error' in manifest) return fail(manifest.error)
-          // Anchor check against THIS session's tree (the worktree, where the
-          // agent just wrote) — the live tree may not have the constant yet.
-          let code: string
-          try {
-            code = await readFile(join(root, manifest.file), 'utf8')
-          } catch {
-            return fail(`could not read ${manifest.file} — does the file exist?`)
-          }
-          for (const param of manifest.params) {
-            if (param.apply.strategy !== 'literal') continue
-            const loc = locateAnchor(code, param.apply.anchor)
-            if ('error' in loc) {
-              const why =
-                loc.error === 'missing'
-                  ? 'does not occur in the file'
-                  : 'occurs more than once (must be unique)'
-              return fail(`param '${param.id}': anchor ${why}. Adjust the anchor or the code.`)
-            }
-            if (!lexLiteral(code, loc.at, param.kind)) {
-              return fail(
-                `param '${param.id}': no ${param.kind} literal immediately after the anchor. ` +
-                  'The anchor must end right before the literal value.'
-              )
-            }
-          }
-          const saved = await saveManifest(ctx?.liveRoot ?? root, manifest)
-          if ('error' in saved) return fail(saved.error)
-          sendToRenderer(getWindow, 'controls:updated', { root: ctx?.liveRoot ?? root })
-          const n = manifest.params.length
-          return {
-            content: [
-              {
-                type: 'text',
-                text:
-                  `Registered control panel "${manifest.title}" for ${manifest.component} ` +
-                  `(${manifest.file}) with ${n} param${n === 1 ? '' : 's'}: ` +
-                  `${manifest.params.map((p) => p.id).join(', ')}. ` +
-                  'The user can now tweak them live from the Custom tab of the selection island.'
-              }
-            ]
-          }
-        }
+        'open_preview',
+        'Open a project page in the user preview. Pass a root-relative path with optional query/hash. Navigation waits for this turn to land.',
+        { path: z.string() },
+        async (args) => asText(treziTool('open_preview', args))
       ),
+      tool(
+        'open_code',
+        'Open the mini code editor at an exact project file and highlight inclusive source lines. Read the file first; use when asked to show the exact code or implementation.',
+        { file: z.string(), startLine: z.number().int().min(1), endLine: z.number().int().min(1).optional() },
+        async (args) => asText(treziTool('open_code', args))
+      ),
+      tool('chat_island', chatIslandDescription, chatIslandShape, async (args) => asText(treziTool('chat_island', args))),
       // Pure spring→CSS calculator. LLMs can't reliably integrate a spring in
       // their head, so this computes the EXACT `linear()` easing + duration the
       // agent should paste into the target repo's CSS. No state, no disk, no
@@ -1055,12 +985,12 @@ async function startSession(
           }
         }
       ),
-      // Curated catalog of external "taste" skill packs Praxis can OFFER to install.
+      // Curated catalog of external "taste" skill packs Trezi can OFFER to install.
       // Pure/read-only — just formats SKILL_PACKS for the model; no network, no disk,
       // so it's auto-allowed. Its sibling install_skills is NOT (it writes + fetches).
       tool(
         'list_recommended_skills',
-        'List the curated catalog of external design/craft skill packs Praxis can offer to install into ' +
+        'List the curated catalog of external design/craft skill packs Trezi can offer to install into ' +
           "the user's project or user scope. Call this when a design task would benefit from established " +
           'craft you lack (animation/interaction taste, color systems, frontend polish), then OFFER the ' +
           'user a relevant pack — never install silently. Use the returned id with install_skills.',
@@ -1082,7 +1012,7 @@ async function startSession(
       ),
       // Install a curated skill pack (`npx skills add … --copy`) into the project or
       // user scope. SIDE-EFFECTING: writes files + hits the network, so it is NOT in
-      // PRAXIS_TOOL_NAMES — it surfaces a normal permission card. packId is validated
+      // TREZI_TOOL_NAMES — it surfaces a normal permission card. packId is validated
       // against the curated allowlist (skill-packs.ts) BEFORE anything spawns, so an
       // arbitrary repo string can never reach `npx skills add`. Persists to the LIVE
       // root (ctx.liveRoot), not the per-chat worktree, so installs aren't stranded.
@@ -1104,60 +1034,63 @@ async function startSession(
             )
         },
         async (args) => {
-          const pack = findPack(args.packId)
-          if (!pack) {
-            return {
-              content: [
-                {
-                  type: 'text' as const,
-                  text:
-                    `install_skills failed: '${args.packId}' is not in the curated skill-pack allowlist. ` +
-                    'Call list_recommended_skills and use one of its ids.'
-                }
-              ],
-              isError: true
-            }
-          }
-          const scope = args.scope ?? pack.recommendedScope
-          const result = await installSkillPack({
-            packId: args.packId,
-            scope,
-            liveRoot: ctx?.liveRoot ?? root
-          })
+          // Main checks the allowlist, then the workflow owner installs (`session-tools.ts`).
+          const result = (await treziTool('install_skills', args)) as { ok?: boolean; message?: string; error?: string }
+          const message = result.message ?? `install_skills failed: ${result.error ?? 'no result'}`
           const restart =
             'Newly installed skills are discovered when the agent starts its next turn — they take ' +
             'effect on your next message (or a fresh session), not mid-turn.'
           return {
-            content: [{ type: 'text' as const, text: `${result.message}\n\n${restart}` }],
+            content: [{ type: 'text' as const, text: result.ok ? `${message}\n\n${restart}` : message }],
             ...(result.ok ? {} : { isError: true })
           }
         }
       )
-    ]
+    ])
   })
 
+  // In a provider helper: an installed `claude` that is logged in when the bundled
+  // one is not (LKM-119, `claude-login.ts`). The owner passes the choice an earlier
+  // helper made this app session, so the probes run once (LKM-135).
+  const phase = ctx?.onPhase ?? (() => {})
+  let executable: string | undefined
+  if (process.env.TREZI_PROVIDER_HELPER === '1') {
+    if (ctx?.claudeCli) {
+      executable = ctx.claudeCli.executable
+      phase('auth', { ms: 0, cached: true })
+    } else {
+      const probing = Date.now()
+      const cli = await resolveClaudeCli()
+      executable = cli.executable
+      phase('auth', { ms: Date.now() - probing, cached: false, ...claudeCliChoice(cli) })
+    }
+  }
+  const spawned = Date.now()
   const q: Query = query({
     prompt: input,
     options: {
       cwd: root,
+      ...(executable ? { pathToClaudeCodeExecutable: executable } : {}),
       settingSources: ['user', 'project', 'local'],
-      // The repo's CLAUDE.md + skills load via settingSources; Praxis's own
+      // The repo's CLAUDE.md + skills load via settingSources; Trezi's own
       // operating rules (v8 R) are appended to the Claude Code preset, with the
-      // preview-tools section (Claude alone can call the in-process praxis tools).
+      // preview-tools section (Claude alone can call the in-process trezi tools).
       systemPrompt: {
         type: 'preset',
         preset: 'claude_code',
-        append: praxisRules({ previewTools: true, projectMemory: ctx?.projectMemory })
+        append: treziRules({ previewTools: true, projectMemory: ctx?.projectMemory })
       },
-      // The praxis MCP server (preview_location / preview_screenshot / define_controls /
+      // The trezi MCP server (preview_location / preview_screenshot / chat_island /
       // spring_to_css / check_contrast / fluid_clamp / color_scale / layered_shadow /
       // line_height / list_recommended_skills / install_skills). All but install_skills
       // are auto-allowed here so they never surface a permission card (canUseTool also
       // short-circuits them, belt-and-suspenders) — main validates everything
-      // define_controls persists, and install_skills prompts (writes files + network).
-      mcpServers: { praxis: previewServer },
-      allowedTools: [...PRAXIS_TOOL_NAMES],
-      // The bundled Praxis skill plugin (only when present in this build).
+      // chat_island persists, and install_skills prompts (writes files + network).
+      mcpServers: { trezi: previewServer },
+      // LKM-138: none of the user's own plugins or MCP servers unless Settings allows them.
+      ...claudeIsolationOptions(root, options.claudeUserPlugins === true),
+      allowedTools: [...TREZI_TOOL_NAMES],
+      // The bundled Trezi skill plugin (only when present in this build).
       ...(existsSync(PLUGIN_PATH)
         ? { plugins: [{ type: 'local' as const, path: PLUGIN_PATH }] }
         : {}),
@@ -1170,12 +1103,34 @@ async function startSession(
       // v9 resume: reload a past conversation's context (the record's captured
       // sdkSessionId) instead of starting fresh. Absent for the default open/new-chat path.
       ...(ctx?.resumeSessionId ? { resume: ctx.resumeSessionId } : {}),
+      // LKM-151: a worktree chat never edits the live checkout by absolute path, in any
+      // permission mode (hooks run before bypass/auto approvals; canUseTool does not).
+      hooks: {
+        PreToolUse: [{
+          hooks: [async input => {
+            const pre = input as { tool_name?: string; tool_input?: unknown }
+            const denied = liveCheckoutEdit(pre.tool_name ?? '', pre.tool_input, root, ctx?.liveRoot ?? root)
+            return denied
+              ? { hookSpecificOutput: { hookEventName: 'PreToolUse' as const, permissionDecision: 'deny' as const, permissionDecisionReason: denied.reason } }
+              : { continue: true }
+          }]
+        }]
+      },
       canUseTool: async (toolName, toolInput, opts) => {
+        // The provider owner decides (S10); the adapter only settles the SDK callback.
+        // An owner that cannot answer fails closed.
+        const verdict: PermissionVerdict = ctx?.grant
+          ? await providerOwner().permission(ctx.grant, toolName, toolInput).catch(() => ({
+              decision: 'deny' as const,
+              message: 'Trezi could not check this permission.'
+            }))
+          : decidePermission(toolName, permissionTarget(toolName, toolInput), {
+              live: true, background: !!ctx?.sessionId, root, liveRoot: ctx?.liveRoot ?? root, profile: ''
+            })
         // The agent asking the user a question isn't a permission decision — surface
         // it as an interactive multiple-choice card and feed the answer back as the
-        // tool result. (Handled before the permission machinery so it never shows an
-        // approve/deny card.)
-        if (toolName === 'AskUserQuestion') {
+        // tool result (it never shows an approve/deny card).
+        if (verdict.decision === 'question') {
           const questions = parseQuestions(toolInput)
           if (questions.length === 0) {
             return { behavior: 'deny', message: 'The question had no answerable options.' }
@@ -1210,25 +1165,13 @@ async function startSession(
             emit({ type: 'question-request', request })
           })
         }
-        // The in-process praxis tools are auto-allowed: the preview pair are
-        // read-only observers of the user's own view, and define_controls only
-        // persists through main's validated saveManifest path. They're also in
-        // allowedTools, but guard here too so a canUseTool call for them can
-        // never reach a prompt.
-        if (PRAXIS_TOOL_NAMES.has(toolName)) {
+        // Trezi's own tools (also in allowedTools) and read-only tools are allowed
+        // without a prompt; the .trezi/ sidecar and Trezi's own data are denied.
+        if (verdict.decision === 'allow') {
           emit({ type: 'status', text: describeTool(toolName, toolInput) })
           return { behavior: 'allow', updatedInput: toolInput }
         }
-        if (touchesSidecar(toolName, toolInput)) {
-          return {
-            behavior: 'deny',
-            message: 'The .praxis/ sidecar is managed by praxis, not the agent.'
-          }
-        }
-        if (AUTO_ALLOW_TOOLS.has(toolName)) {
-          emit({ type: 'status', text: describeTool(toolName, toolInput) })
-          return { behavior: 'allow', updatedInput: toolInput }
-        }
+        if (verdict.decision === 'deny') return { behavior: 'deny', message: verdict.message }
         if (disposed || abort.signal.aborted || opts.signal.aborted) {
           return { behavior: 'deny', message: 'Session no longer active.' }
         }
@@ -1263,7 +1206,7 @@ async function startSession(
               resolve(
                 behavior === 'allow'
                   ? { behavior: 'allow', updatedInput: toolInput }
-                  : { behavior: 'deny', message: 'Denied by the user in Praxis.' }
+                  : { behavior: 'deny', message: 'Denied by the user in Trezi.' }
               )
             }
           })
@@ -1279,12 +1222,20 @@ async function startSession(
   // renderer never touches the filesystem — rank ahead of the SDK's advertised
   // commands, shadowing same-named ones. Either side may resolve first, so both
   // land in this closure and re-emit the merged list.
+  const portableSkills = await discoverPortableSkills()
   let projectSkills: SlashCommandItem[] = []
   let sdkCommandNames: string[] = []
+  const availablePortableSkills = () => portableSkills.filter(
+    (skill) => !projectSkills.some((project) => project.name === skill.name)
+  )
   const emitCommands = (): void => {
-    const merged = mergeSlashCommands(projectSkills, sdkCommandNames)
+    const merged = mergeSlashCommands(
+      [...projectSkills, ...availablePortableSkills()],
+      sdkCommandNames.filter((name) => !portableSkills.some((skill) => name === `trezi:${skill.name}`))
+    )
     if (merged.length) emit({ type: 'commands', commands: merged })
   }
+  emitCommands()
   void discoverProjectSkills(root).then((skills) => {
     if (disposed || !skills.length) return
     projectSkills = skills
@@ -1295,9 +1246,24 @@ async function startSession(
   // system message (which carries slash_commands) only arrives after the FIRST
   // user message — so a freshly-opened project's "/" menu would be empty until you
   // chat once. supportedCommands() (captured at initialize) fetches them eagerly.
+  // Its answer also means the CLI is up (LKM-135): the session starts with the chat,
+  // so a cold CLI warms while the user types and the owner's short deadline ends there.
+  let started = false
+  const cliStarted = (): void => {
+    if (started) return
+    started = true
+    phase('cli', { ms: Date.now() - spawned })
+  }
+  let progressAt = 0
+  const progress = (): void => {
+    if (Date.now() - progressAt < 1000) return
+    progressAt = Date.now()
+    phase('progress')
+  }
   void q
     .supportedCommands()
     .then((cmds) => {
+      cliStarted()
       if (disposed || !cmds.length) return
       sdkCommandNames = cmds.map((c) => c.name)
       emitCommands()
@@ -1324,28 +1290,45 @@ async function startSession(
     /* no supportedModels() on this SDK — same outcome, one turn earlier */
   }
 
+  // The kill switch Stop escalates to: abort the query the SDK was built with (the
+  // same switch shutdown() uses), end the turn exactly once, and let agent.ts rebuild
+  // the now-dead session (`hardStopped`).
+  const forceStop = (): void => {
+    if (hardStopped) return
+    hardStopped = true // stop the reader loop double-emitting on a late result
+    abort.abort()
+    input.close()
+    emit({
+      type: 'error',
+      message:
+        'That turn stopped responding, so Trezi force-stopped it. The chat has been ' +
+        'restarted — earlier messages are still shown, but the assistant no longer has ' +
+        'them in context.'
+    })
+    cap.finalize()
+    emit({ type: 'done' })
+  }
+
   // Drive the output stream for the life of the session.
   void (async () => {
     let streamedText = false
-    // Token accounting for the API request in flight. The SDK reports the SAME
-    // request's usage repeatedly and cumulatively — `message_start` (the input
-    // side), then each `message_delta` (the running output total), then the
-    // complete `assistant` message — so remember the running maximum already
-    // emitted and send only what's new. Reset per request, at `message_start`.
-    let sentUsage = emptyUsage()
-    const reportUsage = (raw: unknown): void => {
-      const total = readUsage(raw)
-      if (!total) return
-      const delta = usageDelta(sentUsage, total)
-      if (isEmptyUsage(delta)) return
-      sentUsage = addUsage(sentUsage, delta)
-      emit({ type: 'usage', ...delta })
-    }
+    // The turn's login card is out; if the CLI then exits, the turn only needs its `done`.
+    let authFailed = false
+    // Token accounting for the API request in flight (`stream-usage.ts`): the
+    // SDK's cumulative reports, sent once each, plus a live output estimate from
+    // the streamed text, thinking and tool input in between (LKM-147).
+    const usage = streamUsage((delta) => emit({ type: 'usage', ...delta }))
+    const reportUsage = (raw: unknown): void => usage.report(raw)
     try {
       for await (const msg of q) {
+        cliStarted()
         switch (msg.type) {
           case 'system': {
             const sys = msg as { subtype?: string; slash_commands?: string[]; session_id?: string }
+            // The turn's session began, or the CLI reports work (a request, a retry,
+            // thinking) before any output: the owner keeps waiting (LKM-135).
+            if (sys.subtype === 'init') phase('init')
+            else progress()
             if (sys.subtype === 'init') {
               // v9 resume: capture the SDK's own resumable session id off the init
               // message — this is what a later `agent:resume-session` forwards back
@@ -1361,14 +1344,16 @@ async function startSession(
             break
           }
           case 'stream_event': {
-            const ev = (msg as { event?: { type?: string; message?: unknown; usage?: unknown } })
+            const ev = (msg as { event?: { type?: string; message?: unknown; usage?: unknown; delta?: Record<string, unknown> } })
               .event
             if (ev?.type === 'message_start') {
               // A new request — its counters start from zero again.
-              sentUsage = emptyUsage()
+              usage.start()
               reportUsage((ev.message as { usage?: unknown } | undefined)?.usage)
             } else if (ev?.type === 'message_delta') {
               reportUsage(ev.usage)
+            } else {
+              usage.streamed(streamedChars(ev))
             }
             const text = textDelta(msg)
             if (text) {
@@ -1382,6 +1367,15 @@ async function startSession(
             // The final, authoritative usage for this request — a no-op delta
             // when the stream events above already reported all of it.
             reportUsage((msg.message as { usage?: unknown }).usage)
+            // "Not logged in · Please run /login" is the CLI's, not the model's: a login
+            // card, never assistant text (LKM-119).
+            if (isAuthFailure(msg as never)) {
+              const said = msg.message.content.map((block) => (block.type === 'text' ? block.text : '')).join(' ').trim()
+              emit({ type: 'error', code: 'auth', message: said || 'Claude is not logged in.' })
+              authFailed = true
+              forgetClaudeCli()
+              break
+            }
             for (const block of msg.message.content) {
               if (block.type === 'text' && !streamedText) {
                 cap.appendAssistant(block.text)
@@ -1400,12 +1394,14 @@ async function startSession(
             cap.finalize()
             emit({ type: 'done' })
             streamedText = false
+            authFailed = false
             break
           }
         }
       }
     } catch (err) {
-      if (!abort.signal.aborted) {
+      if (authFailed) emit({ type: 'done' })
+      else if (!abort.signal.aborted) {
         emit({ type: 'error', message: err instanceof Error ? err.message : String(err) })
       }
     }
@@ -1415,7 +1411,15 @@ async function startSession(
     key,
     root,
     options,
-    send: (text, images) => input.push(text, images),
+    send: (text, images) => {
+      // Claude's /login needs its terminal UI: the chat shows the login card instead.
+      if (isLoginCommand(text)) {
+        emit({ type: 'error', code: 'auth', message: LOGIN_COMMAND_MESSAGE })
+        emit({ type: 'done' })
+        return
+      }
+      input.push(withSkillReferences(text, availablePortableSkills()), images)
+    },
     pending,
     pendingQuestions,
     emit,
@@ -1434,35 +1438,26 @@ async function startSession(
     setPermissionMode: async (mode) => {
       await q.setPermissionMode?.(mode)
     },
+    // `q.interrupt()` is a CONTROL REQUEST to the CLI subprocess, and the SDK's
+    // control-request promise settles only when a matching `control_response` comes
+    // back — there is no timeout in the SDK. So when that subprocess is wedged (the
+    // request went out and nothing ever came back: 0 tokens in, 0 out, the turn
+    // running for minutes) the graceful path never returns — precisely the state Stop
+    // exists to escape. The provider owner holds the deadline and tells
+    // provider-sessions.ts when to reach for `forceStop` (S10); started outside that
+    // wiring, the adapter bounds it itself.
     interrupt: async () => {
-      // `q.interrupt()` is a CONTROL REQUEST to the CLI subprocess, and the SDK's
-      // control-request promise settles only when a matching `control_response`
-      // comes back — there is no timeout in the SDK. So when that subprocess is
-      // wedged (the request went out and nothing ever came back: 0 tokens in, 0
-      // out, the turn running for minutes) the graceful path never returns, this
-      // promise never settles, and Stop does nothing at all — precisely the state
-      // Stop exists to escape. Race it, then escalate to the abort signal the
-      // query was constructed with, which is the kill switch shutdown() already
-      // relies on and which nothing else was reaching for here.
+      if (ctx?.grant) {
+        await q.interrupt?.()
+        return undefined
+      }
       return await interruptWithEscalation({
         graceful: () => q.interrupt?.(),
         graceMs: INTERRUPT_GRACE_MS,
-        escalate: () => {
-          hardStopped = true // stop the reader loop double-emitting on a late result
-          abort.abort()
-          input.close()
-          emit({
-            type: 'error',
-            message:
-              'That turn stopped responding, so Praxis force-stopped it. The chat has been ' +
-              'restarted — earlier messages are still shown, but the assistant no longer has ' +
-              'them in context.'
-          })
-          cap.finalize()
-          emit({ type: 'done' })
-        }
+        escalate: forceStop
       })
-    }
+    },
+    forceStop
   }
 }
 
@@ -1496,6 +1491,7 @@ async function generateTitle(
       prompt,
       options: {
         settingSources: [],
+        strictMcpConfig: true,
         allowedTools: [],
         includePartialMessages: false,
         permissionMode: 'default',
@@ -1540,6 +1536,7 @@ async function updateProjectMemory(
       prompt,
       options: {
         settingSources: [],
+        strictMcpConfig: true,
         allowedTools: [],
         includePartialMessages: false,
         permissionMode: 'default',
@@ -1574,5 +1571,6 @@ export const claudeProvider: ModelProvider = {
   supportsSpawn: true,
   startSession,
   generateTitle,
-  updateProjectMemory
+  updateProjectMemory,
+  checkLogin: checkClaudeLogin
 }
