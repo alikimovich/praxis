@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { NativeChatController } from '../src/native/chat-controller.ts'
+import { snapshot } from '../src/native/chat-snapshot.ts'
+import { METADATA_FIELDS } from '../src/native/workspace-model.ts'
 import { NativeContextController } from '../src/native/context-controller.ts'
 const calls = [], deferred = []
 let delay = false
@@ -76,4 +78,95 @@ assert.equal(chat.get('a').context.spawns[0].activity, 'Editing border styles')
   assert.deepEqual(notesChat.get('a').context.notes, [{ id: 'n2', text: 'After remove' }], 'stale note lists are rejected')
   assert.deepEqual(sent.filter(c => c[0] === 'preview:set-annotations').at(-1), ['preview:set-annotations', [{ id: 'n2', selector: '.b' }]], 'pins follow the newest list')
   console.log('Native context: out-of-order note responses keep the newest list')
+}
+
+// LKM-153: the Connect to Trezi outcome is kept in the project's workspace entry (the
+// workspace file restores it on relaunch); stamps in the preview are the proof.
+{
+  const open = entry => {
+    const own = async (channel, ...args) => {
+      if (channel === 'agent:workspace-snapshot') return { projects: [{ root: entry.root, chats: [{ sessionKey: entry.key, options: {}, record: { transcript: [] }, isRunning: false }] }] }
+      if (channel === 'setup:detect') return { canInstrument: true }
+      return invoke(channel, ...args)
+    }
+    const restarts = []
+    const space = { active: entry, state: { projects: [entry], history: {} }, services: { invoke: own }, changed() {}, command: async command => restarts.push(command) }
+    const owned = new NativeChatController({ invoke: own, render() {}, effect() {} })
+    const context = new NativeContextController(space, owned, () => ({}))
+    context.verifyGraceMs = 20
+    return { context, restarts, setup: () => owned.get(entry.key).context.setup, card: () => snapshot(owned.get(entry.key), []).cards.find(c => c.id === 'setup') }
+  }
+  const relaunch = entry => JSON.parse(JSON.stringify(entry))
+  const settle = () => new Promise(resolve => setTimeout(resolve, 60))
+
+  // Not now is remembered across relaunch.
+  let entry = { key: 'c', root: '/c', activeSessionKey: 'c' }
+  let run = open(entry)
+  await run.context.activate(entry); run.context.readiness({ stamps: 0 })
+  assert.equal(run.card().title, 'Connect this project to Trezi')
+  await run.context.effect({ type: 'setup', chat: 'c', phase: 'dismissed' })
+  assert.equal(entry.sourceSetup.state, 'declined')
+  entry = relaunch(entry); run = open(entry)
+  await run.context.activate(entry); run.context.readiness({ stamps: 0 })
+  assert.equal(run.setup().needed, false); assert.equal(run.card(), undefined, 'Not now survives a relaunch')
+
+  // A failed setup shows the exact reason and Retry, also after a relaunch.
+  entry = { key: 'd', root: '/d', activeSessionKey: 'd' }; run = open(entry)
+  await run.context.activate(entry); run.context.readiness({ stamps: 0 })
+  const copy = 'Trezi could not copy .trezi/trezi-vite.mjs into the chat workspace (/w/d).'
+  await run.context.effect({ type: 'setup', chat: 'd', phase: 'failed', status: copy })
+  assert.equal(run.card().detail, `Setup failed: ${copy}`)
+  assert.deepEqual(run.card().actions.map(a => a.label), ['Not now', 'Retry'])
+  assert.deepEqual([entry.sourceSetup.state, entry.sourceSetup.reason], ['failed', copy])
+  entry = relaunch(entry); run = open(entry)
+  await run.context.activate(entry); run.context.readiness({ stamps: 0 })
+  assert.equal(run.card().detail, `Setup failed: ${copy}`)
+  assert.equal(run.card().actions[1].label, 'Retry')
+
+  // Landed but the restarted preview has no stamps: fails with the dev server's reason.
+  await run.context.effect({ type: 'setup', chat: 'd', phase: 'configuring' })
+  assert.equal(run.card().actions[1].label, 'Set up')
+  await run.context.effect({ type: 'setup', chat: 'd', phase: 'landed' })
+  assert.deepEqual(run.restarts, [{ type: 'restart', key: 'd' }])
+  assert.equal(run.card().detail, 'Setup landed. Restarting the preview to check for stamps…')
+  run.context.readiness({ stamps: 0, documentStartedAt: Date.now() - 60_000 })
+  assert.equal(run.setup().failed, false, 'the page from before the restart is not the proof')
+  run.context.readiness({ stamps: 0, documentStartedAt: Date.now() + 1000 })
+  run.context.devServerLog('/d', 'VITE v8.0.3 ready\n3:04:05 PM [vite] [trezi-source] @babel/core is not installed, so elements are not mapped to source. Add it to devDependencies.\n')
+  assert.equal(run.setup().failed, false, 'one zero sample is not yet a failure')
+  await settle()
+  assert.equal(run.card().detail, 'Setup failed: the dev server reported: @babel/core is not installed, so elements are not mapped to source. Add it to devDependencies.')
+  assert.equal(entry.sourceSetup.state, 'failed')
+
+  // A landed turn that changed nothing names that; a later stamped sample still wins.
+  await run.context.effect({ type: 'setup', chat: 'd', phase: 'landed', status: 'the setup turn finished without changing any file. Its reply in this chat says why.' })
+  run.context.readiness({ stamps: 0, documentStartedAt: Date.now() + 1000 })
+  await settle()
+  assert.match(run.card().detail, /^Setup failed: the setup turn finished without changing any file/)
+  await run.context.effect({ type: 'setup', chat: 'd', phase: 'landed' })
+  run.context.readiness({ stamps: 0, documentStartedAt: Date.now() + 1000 })
+  run.context.readiness({ stamps: 12, documentStartedAt: Date.now() + 1000 })
+  await settle()
+  assert.equal(run.card(), undefined, 'the card disappears once stamps are detected')
+  assert.equal(run.setup().status, 'Setup verified — 12 element(s) now mapped to source.')
+  assert.equal(run.setup().failed, false)
+  assert.equal(entry.sourceSetup.state, 'done')
+  entry = relaunch(entry); run = open(entry)
+  await run.context.activate(entry); run.context.readiness({ stamps: 0 })
+  assert.equal(run.card(), undefined, 'a connected project is not offered setup on a page without elements')
+
+  // Stamps found without any setup (configured by hand) hide the card too.
+  entry = { key: 'e', root: '/e', activeSessionKey: 'e' }; run = open(entry)
+  await run.context.activate(entry); run.context.readiness({ stamps: 0 })
+  assert.ok(run.card())
+  run.context.readiness({ stamps: 3 })
+  assert.equal(run.card(), undefined)
+  assert.equal(run.setup().status, null)
+  assert.equal(entry.sourceSetup.state, 'done')
+  // Persisted through the workspace store, whose Swift rule (WorkspaceFile.swift) this mirrors.
+  assert.ok(METADATA_FIELDS.sourceSetup(entry.sourceSetup))
+  assert.ok(METADATA_FIELDS.sourceSetup({ state: 'failed', reason: copy, at: 1 }))
+  for (const bad of ['declined', { state: 'pending', at: 1 }, { state: 'done' }, { state: 'done', at: -1 }, { state: 'done', at: 1.5 },
+    { state: 'failed', reason: 3, at: 1 }, { state: 'done', at: 1, extra: true }]) assert.equal(METADATA_FIELDS.sourceSetup(bad), false, JSON.stringify(bad))
+  console.log('Native context: Connect to Trezi remembers Not now, failures with Retry and stamped projects')
 }

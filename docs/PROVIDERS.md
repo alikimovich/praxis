@@ -251,6 +251,24 @@ plugin supplied as an absolute path string. Production leaves the original confi
 unchanged; loaders and the remark transform independently disable outside dev.
 Setup waits for landing and new-document stamp observations before reporting success.
 
+React on Vite (LKM-153) uses Trezi's own Vite plugin, `.trezi/trezi-vite.mjs`
+(`src/main/setup-vite.ts`), for every Vite version and React plugin. It is
+`enforce: 'pre'` and `apply: 'serve'` and runs the unchanged `trezi-source.cjs`
+visitor through the project's `@babel/core` (parse and print only) before Vite's own
+JSX transform. Vite 8 transforms with Oxc and `@vitejs/plugin-react` 6 has no
+`babel` option, so `react({ babel })` no longer stamps; `plugin-react-swc` never
+had one. The prompt names the detected Vite and React plugin versions and asks for
+`trezi()` first in `plugins` plus `@babel/core` as a dev dependency. React without
+Vite keeps the Babel plugin; plain HTML is stamped by the dev server's HTML path
+(`src/main/html-source.ts`) and offers no setup.
+
+The outcome is remembered per project in its workspace entry (`sourceSetup`:
+`done`, `declined` for Not now, or `failed` with the reason) and survives relaunch.
+The card shows only while the preview has no stamps and the user has not declined.
+Stamps in the preview hide it and record `done`. A failure shows the exact reason
+(Trezi's own error, the stopped or held setup turn, or the dev server's
+`[trezi-source]` line when the restarted preview stays unstamped) with Retry.
+
 ## Automatic text reconciliation
 
 Successful interactive turns use the shared landing coordinator to merge independent

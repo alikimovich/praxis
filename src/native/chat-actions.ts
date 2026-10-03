@@ -64,8 +64,9 @@ export async function cardAction(controller: NativeChatController, chat: Chat, a
       chat.setup = true; chat.sending = true; controller.changed(chat)
       const cancellation = chat.cancellation
       try {
-        const result = await invoke('setup:scaffold', chat.root)
-        if (!result.ok) throw new Error(result.error ?? 'Setup failed.')
+        // With the chat key Trezi copies the helpers into the chat's worktree first (LKM-153).
+        const result = await invoke('setup:scaffold', chat.root, chat.chat)
+        if (!result.ok) throw new Error(result.error ?? 'Trezi could not write its setup helpers.')
         const prompt = setupPrompt(result)
         if (!prompt) throw new Error(`Automatic source mapping is unavailable for ${result.framework ?? 'this framework'}.`)
         if (chat.cancellation !== cancellation || controller.chats.get(chat.chat) !== chat) return
@@ -74,9 +75,9 @@ export async function cardAction(controller: NativeChatController, chat: Chat, a
         effect({ type: 'setup', chat: chat.chat, phase: 'configuring' }); controller.changed(chat)
         await invoke('agent:send', prompt, undefined, chat.chat, undefined, chat.turn)
       } catch (error) {
+        // The setup card shows the exact reason with a retry, so no separate error card.
         chat.setup = false; chat.isRunning = false
-        effect({ type: 'setup', chat: chat.chat, phase: 'failed', status: String(error) })
-        throw error
+        effect({ type: 'setup', chat: chat.chat, phase: 'failed', status: error instanceof Error ? error.message : String(error) })
       } finally { chat.sending = false; void controller.drain(chat) }
       break
     }

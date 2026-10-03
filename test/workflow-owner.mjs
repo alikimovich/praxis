@@ -211,6 +211,21 @@ try {
   assert.equal(setup.first.written, true); assert.equal(setup.second.written, false); assert.equal(setup.first.helpers.length, 4)
   assert.equal(setup.kept, '// edited by hand\n'); assert.equal(setup.removed.files.length, 5)
 
+  // LKM-153: React on Vite 8 gets the Vite plugin beside the Babel visitor; the owner
+  // accepts it, hashes it for the setup prompt and removes it on uninstall.
+  const viteSetup = await owned('setup-vite', async (owner, w) => {
+    write(w.local, 'package.json', JSON.stringify({ dependencies: { react: '^19.2.0' }, devDependencies: { vite: '^8.0.0', '@vitejs/plugin-react': '^6.0.0' } }))
+    const files = helperFiles(await detect(w.local))
+    const wrote = await owner.writeHelpers(w.local, files)
+    const plugin = readFileSync(join(w.local, '.trezi/trezi-vite.mjs'), 'utf8')
+    const removed = await owner.removeHelpers(w.local)
+    return { files, wrote, plugin, removed, left: existsSync(join(w.local, '.trezi/trezi-vite.mjs')) }
+  })
+  assert.equal(viteSetup.wrote.ok, true, viteSetup.wrote.error)
+  assert.deepEqual(viteSetup.wrote.helpers.map(h => h.path), ['.trezi/trezi-source.cjs', '.trezi/trezi-vite.mjs'])
+  assert.equal(viteSetup.plugin, viteSetup.files[1].content)
+  assert.ok(viteSetup.removed.files.includes('.trezi/trezi-vite.mjs')); assert.equal(viteSetup.left, false)
+
   const created = await owned('create-project', async (owner, w) => {
     const root = join(w.base, 'New App')
     const result = await owner.createProject(root, starterFiles(root, 'react'), 'bun')

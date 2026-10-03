@@ -16,11 +16,11 @@ struct WorkflowSetup {
     var root: String { context.root }
 
     static let helpers: Set<String> = [".trezi/trezi-source.cjs", ".trezi/trezi-rn-source.cjs", ".trezi/trezi-svelte-stamp.mjs",
-                                       ".trezi/trezi-next-loader.cjs", ".trezi/trezi-next.cjs", ".trezi/trezi-mdx.mjs"]
+                                       ".trezi/trezi-next-loader.cjs", ".trezi/trezi-next.cjs", ".trezi/trezi-mdx.mjs", ".trezi/trezi-vite.mjs"]
     /// `uninstall` order (setup.ts): current helpers, the dsgn-era files, the praxis-era helpers.
     static let removable: [String] = {
         let current = [".trezi/trezi-source.cjs", ".trezi/trezi-rn-source.cjs", ".trezi/trezi-svelte-stamp.mjs",
-                       ".trezi/trezi-next-loader.cjs", ".trezi/trezi-next.cjs", ".trezi/trezi-mdx.mjs"]
+                       ".trezi/trezi-next-loader.cjs", ".trezi/trezi-next.cjs", ".trezi/trezi-mdx.mjs", ".trezi/trezi-vite.mjs"]
         let legacy = ["dsgn-source-plugin.cjs", ".dsgn/dsgn-source.cjs", ".dsgn/dsgn-rn-source.cjs", ".dsgn/dsgn-svelte-stamp.mjs"]
         return current + legacy + current.map { $0.replacingOccurrences(of: "trezi", with: "praxis") }
     }()

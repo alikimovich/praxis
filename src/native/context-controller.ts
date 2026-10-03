@@ -1,4 +1,4 @@
-import type { Annotation, SelectedElement, AgentEvent } from '../shared/api'
+import type { Annotation, SelectedElement, AgentEvent, SourceSetupState } from '../shared/api'
 import type { NativeChatContext, NativeChatEffect } from '../shared/native-chat-controller'
 import { describeSelectionForPrompt, selectionForBubble } from '../shared/selection-context'
 import type { ProjectEntry } from '../shared/workspace'
@@ -15,10 +15,16 @@ interface ProjectContext {
   canInstrument?: boolean
   stamps?: number
   verifyingAfter?: number
+  verifyFailure?: ReturnType<typeof setTimeout>
+  /** Why the landed setup turn may not have wired anything (it changed no file). */
+  verifyHint?: string
   loading?: Promise<void>
 }
 export class NativeContextController {
   readonly projects = new Map<string, ProjectContext>()
+  /** How long a restarted preview may take to show its first stamp before setup fails. */
+  verifyGraceMs = 3500
+  private readonly treziLog = new Map<string, string>()
   readonly spawns = new Map<string, NativeChatContext['spawns']>()
   private readonly finishedSpawns = new Set<string>()
   constructor(readonly workspace: NativeWorkspaceController, readonly chat: NativeChatController, readonly turn: () => NativeChatContext['turn'], readonly send: (channel: string, ...args: any[]) => Promise<any> = workspace.services.invoke) {}
@@ -49,13 +55,42 @@ export class NativeContextController {
   }
   private async load(root: string) {
     const state = this.project(root), read = ++state.notesRead
+    const saved = this.remembered(root)
+    if (saved?.state === 'declined') state.setup.dismissed = true
+    if (saved?.state === 'failed' && !state.setup.failed) this.showFailure(state, saved.reason)
     const results = await Promise.allSettled([this.invoke('setup:detect', root), this.invoke('tokens:detect', root), this.invoke('annotations:list', root)])
     if (this.projects.get(root) !== state) return
     if (results[0].status === 'fulfilled') state.canInstrument = results[0].value.canInstrument
     if (results[1].status === 'fulfilled') state.tokens.needed = results[1].value.source === 'none'
     if (results[2].status === 'fulfilled' && read === state.notesRead) this.setNotes(state, results[2].value)
-    if (state.stamps === 0 && state.canInstrument && !state.setup.dismissed) state.setup.needed = true
+    if (state.stamps === 0 && this.offer(root, state)) state.setup.needed = true
     this.changed(root)
+  }
+  /** LKM-153: the project's Connect to Trezi outcome, kept in its workspace entry so a
+   *  relaunch remembers "Not now", a stamped project and the last failure. */
+  private remembered(root: string) { return this.workspace.state.projects.find(p => p.root === root)?.sourceSetup }
+  private remember(root: string, value: SourceSetupState['state'], reason?: string) {
+    const entry = this.workspace.state.projects.find(p => p.root === root)
+    if (!entry || (entry.sourceSetup?.state === value && entry.sourceSetup.reason === reason)) return
+    entry.sourceSetup = { state: value, ...(reason ? { reason: reason.slice(0, 4000) } : {}), at: Date.now() }
+    this.workspace.changed()
+  }
+  /** Offer setup only where stamping is possible, missing and not declined or already seen. */
+  private offer(root: string, state: ProjectContext) {
+    return !!state.canInstrument && !state.setup.dismissed && this.remembered(root)?.state !== 'done'
+  }
+  private showFailure(state: ProjectContext, reason = 'Setup did not finish.') {
+    state.setup.failed = true
+    state.setup.status = `Setup failed: ${reason}`
+  }
+  private fail(root: string, state: ProjectContext, reason: string) {
+    this.showFailure(state, reason)
+    this.remember(root, 'failed', reason)
+  }
+  /** A dev-server line from Trezi's Vite plugin (`[trezi-source] …`) names why nothing got stamped. */
+  devServerLog(root: string, output: string) {
+    const line = output.split('\n').reverse().find(text => text.includes('[trezi-source]'))
+    if (line) this.treziLog.set(root, line.slice(line.indexOf('[trezi-source]') + 14).trim())
   }
   selection(element: SelectedElement | null) {
     const root = this.workspace.active?.root
@@ -74,12 +109,28 @@ export class NativeContextController {
     const state = this.project(root)
     if (state.verifyingAfter && info.documentStartedAt !== undefined && info.documentStartedAt < state.verifyingAfter) return
     state.stamps = info.stamps
-    if (state.verifyingAfter) {
-      state.setup.status = info.stamps > 0 ? `Setup verified — ${info.stamps} element(s) now mapped to source.` : 'Setup ran but no elements got stamped. Check the config wiring and dev-server restart.'
+    if (info.stamps > 0) {
+      // Stamps in the preview are the proof, whatever was remembered before.
+      state.setup.needed = false; state.setup.failed = false
+      state.setup.status = state.verifyingAfter ? `Setup verified — ${info.stamps} element(s) now mapped to source.` : null
       state.verifyingAfter = undefined
+      this.remember(root, 'done')
+      clearTimeout(state.verifyFailure); state.verifyFailure = undefined
+    } else {
+      // The preview re-samples a slow first render, so a zero only fails setup once
+      // no later sample of the restarted page found stamps.
+      if (state.verifyingAfter && !state.verifyFailure) state.verifyFailure = setTimeout(() => {
+        state.verifyFailure = undefined
+        if (!state.verifyingAfter || (state.stamps ?? 0) > 0) return
+        state.verifyingAfter = undefined
+        const log = this.treziLog.get(root)
+        this.fail(root, state, log ? `the dev server reported: ${log}` : state.verifyHint ??
+          'the restarted preview has no element mapped to source. Check that the config change landed and that the dev server loads the Trezi plugin.')
+        if (this.offer(root, state)) state.setup.needed = true
+        this.changed(root)
+      }, this.verifyGraceMs)
+      if (this.offer(root, state)) state.setup.needed = true
     }
-    if (info.stamps > 0) state.setup.needed = false
-    else if (state.canInstrument && !state.setup.dismissed) state.setup.needed = true
     this.changed(root)
   }
   async effect(effect: NativeChatEffect) {
@@ -90,10 +141,13 @@ export class NativeContextController {
       const root = this.chat.chats.get(effect.chat)?.context?.root
       if (!root) return
       const state = this.project(root)
-      if (effect.status) state.setup.status = effect.status
-      if (effect.phase === 'dismissed') { state.setup.dismissed = true; state.setup.needed = false }
+      if (effect.phase === 'dismissed') { state.setup.dismissed = true; state.setup.needed = false; this.remember(root, 'declined') }
+      if (effect.phase === 'configuring') { state.setup.failed = false; state.setup.status = effect.status ?? null }
+      if (effect.phase === 'failed') this.fail(root, state, effect.status ?? 'the setup turn did not finish.')
       if (effect.phase === 'landed') {
-        state.verifyingAfter = Date.now()
+        state.verifyingAfter = Date.now(); state.verifyHint = effect.status; this.treziLog.delete(root)
+        clearTimeout(state.verifyFailure); state.verifyFailure = undefined
+        state.setup.failed = false; state.setup.status = 'Setup landed. Restarting the preview to check for stamps…'
         const entry = this.workspace.state.projects.find(p => p.root === root)
         if (entry && this.workspace.active?.key === entry.key) await this.workspace.command({ type: 'restart', key: entry.key })
         else state.setup.status = 'Setup applied. Reopen the project to restart its preview.'

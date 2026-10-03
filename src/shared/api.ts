@@ -1187,6 +1187,7 @@ export type Frontend = 'next' | 'react' | 'react-native' | 'svelte' | 'vue' | 's
 /** How trezi instruments source mapping for the detected framework. */
 export type SetupStrategy =
   | 'next-loader'
+  | 'vite-plugin'
   | 'babel-plugin'
   | 'babel-plugin-rn'
   | 'svelte-preprocess'
@@ -1215,9 +1216,31 @@ export interface NextSetupInfo {
   router: 'app' | 'pages' | 'mixed' | 'unknown'
 }
 
+/** A React project built by Vite (LKM-153): Vite 8 transforms with Oxc and
+ *  `@vitejs/plugin-react` 6 has no Babel option, so stamping uses Trezi's own plugin. */
+export interface ViteSetupInfo {
+  version?: string
+  declaredVersion?: string
+  major?: number
+  /** The React plugin the project uses, with its installed (else declared) version. */
+  reactPlugin?: string
+  reactPluginVersion?: string
+}
+
+/** What the project remembers about Connect to Trezi (LKM-153), kept in its workspace entry. */
+export interface SourceSetupState {
+  state: 'done' | 'declined' | 'failed'
+  /** The exact failure, shown with a retry. */
+  reason?: string
+  at: number
+}
+
 export interface SetupResult {
   next?: NextSetupInfo
+  vite?: ViteSetupInfo
   helpers?: Array<{ path: string; sha256: string }>
+  /** The chat worktree Trezi copied the helpers into before the setup turn. */
+  checkout?: string
 
   ok: boolean
   /** The detected UI framework (NOT the build tool) — drives everything. */

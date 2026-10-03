@@ -19,6 +19,7 @@ import {
   syncFromLive
 } from './chat-worktrees'
 import { recordEdit } from './edit-history'
+import { editingOwner } from './editing-owner'
 import { isRepoRoot } from './git'
 import { commitLiveTurn } from './live-commit'
 import { enqueueRepoWrite } from './repo-write-queue'
@@ -233,12 +234,35 @@ export async function beforeTurn(sessionKey: string, _text: string): Promise<voi
     enqueueRepoWrite(st.liveRoot, async () => {
       await recreateWorkspace(st)
       await settleReverted(st)
-      if (st.parked) return
+      // Helpers live under excluded `.trezi/` paths, so a parked chat gets them too
+      // without looking changed (LKM-153: a stopped chat ran setup without them).
+      if (st.parked) return editingOwner().syncSetupHelpers(st.liveRoot, st.wt.path)
       await syncFromLive(st.liveRoot, st.wt)
     })
   )
   st.chain = task.catch(() => {})
   await task
+}
+
+/**
+ * Copy the live setup helpers into a chat's checkout now, parked or not (LKM-153).
+ * Connect to Trezi runs its agent there and agents may not write `.trezi/`, so Trezi
+ * puts them in place itself. Answers the checkout, or null for a chat of another
+ * project or one that runs in the live tree.
+ */
+export async function syncChatHelpers(sessionKey: string, liveRoot: string): Promise<string | null> {
+  const st = states.get(sessionKey)
+  if (!st || st.liveRoot !== liveRoot) return null
+  st.lastUsed = Date.now()
+  const task = st.chain.then(() =>
+    enqueueRepoWrite(st.liveRoot, async () => {
+      await recreateWorkspace(st)
+      await editingOwner().syncSetupHelpers(st.liveRoot, st.wt.path)
+      return st.wt.path
+    })
+  )
+  st.chain = task.catch(() => {})
+  return task
 }
 
 /** Drop a reverted stopped turn's held work for good (inside the repository lease).

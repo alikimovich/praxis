@@ -241,6 +241,21 @@ the private checkout, verifies the copies, and records paths/SHA-256 hashes in
 `.trezi/setup-helpers.json`. This also handles setup started after a chat's
 worktree already exists. Annotations and other sidecar data are not shared.
 
+A parked chat (held work after a stop, failure or drift) gets the same copy at the
+start of every turn (LKM-153). Before, `beforeTurn` skipped parked chats entirely,
+so a Connect to Trezi started in a chat with a stopped turn reached the agent without
+`.trezi/trezi-source.cjs` and the setup stopped. The copy is safe while parked
+because `.trezi/` never enters a snapshot, landing or clean. Set up also copies the
+helpers itself before the setup turn (`syncChatHelpers` in
+`src/main/chat-isolation.ts`, on the chat's repository queue, recreating an
+idle-removed worktree first) and checks every hash against the live write. A
+mismatch fails setup with that reason instead of reaching the agent. We chose this
+over pointing the agent at the live `.trezi/` by absolute path, because the config's
+relative `./.trezi/…` import and the agent's own checks (hashes, typecheck, a test
+run) resolve in its checkout. We also chose it over relaxing the "agents never write
+`.trezi/`" rule. The agent only edits config, and the dev server keeps loading the
+live copies.
+
 Every worktree has its own `node_modules`; none links to the live one (LKM-146).
 Before, ordinary projects got a symlink, so an agent's `npm install`/`bun add`/
 `pnpm remove` in a chat wrote straight into the folder the running dev server
